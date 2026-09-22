@@ -1,0 +1,36 @@
+{
+  "name": "og-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OG System - Agency Management + Client Portal (self-hosted, no paid services)",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "seed": "npm run seed -w server --",
+    "seed:admin": "npm run seed:admin -w server --",
+    "test": "npm run test -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:backup": "node scripts/backup-db.mjs",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-libsql": "~6.19.3",
+    "@prisma/client": "~6.19.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prisma": "~6.19.3"
+  }
+}

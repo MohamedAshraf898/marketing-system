@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+client/dist
+dist
+.env
+.env.*
+!.env.example
+*.log
+prisma/*.db
+prisma/*.db-*
+uploads/*
+backups/*
+.git
+.DS_Store
+coverage
