@@ -117,7 +117,7 @@ requestsRouter.post(
         dueDate: body.dueDate ?? null,
       },
     });
-    await audit(ctx, 'REQUEST_CREATED', 'request', created.id, { title: created.title, priority: created.priority }, { clientId: created.clientId, clientVisible: true });
+    await audit(ctx, 'REQUEST_CREATED', 'request', created.id, { title: created.title, priority: created.priority });
 
     const recipients = isClient ? await staffRecipients(target.clientId, created.campaignId) : await clientRecipients(target.clientId);
     await notify(recipients, { type: 'NEW_REQUEST', entity: 'request', entityId: created.id, data: { title: created.title, by: ctx.user.name } }, ctx.user.id);
@@ -160,14 +160,14 @@ requestsRouter.patch(
     const updated = await prisma.request.update({ where: { id: existing.id }, data });
 
     if (statusChanged) {
-      await audit(ctx, 'REQUEST_STATUS_CHANGED', 'request', existing.id, { from: existing.status, to: body.status, title: existing.title }, { clientId: existing.clientId, clientVisible: true });
+      await audit(ctx, 'REQUEST_STATUS_CHANGED', 'request', existing.id, { from: existing.status, to: body.status });
       const recipients = isClient
         ? await staffRecipients(existing.clientId, existing.campaignId)
         : [...(await clientRecipients(existing.clientId))];
       await notify(recipients, { type: 'REQUEST_STATUS_CHANGED', entity: 'request', entityId: existing.id, data: { title: existing.title, status: body.status } }, ctx.user.id);
     }
     const otherFields = Object.keys(body).filter((k) => k !== 'status');
-    if (otherFields.length) await audit(ctx, 'REQUEST_UPDATED', 'request', existing.id, { fields: otherFields, title: existing.title }, { clientId: existing.clientId });
+    if (otherFields.length) await audit(ctx, 'REQUEST_UPDATED', 'request', existing.id, { fields: otherFields });
     if (staffBody.assignedToId && staffBody.assignedToId !== existing.assignedToId) {
       await notify([staffBody.assignedToId], { type: 'REQUEST_ASSIGNED', entity: 'request', entityId: existing.id, data: { title: existing.title } }, ctx.user.id);
     }
@@ -196,7 +196,7 @@ requestsRouter.post(
       data: { requestId: r.id, clientId: r.clientId, userId: ctx.user.id, authorType: isClient ? 'CLIENT' : 'TEAM', comment: body.comment },
       include: { user: { select: userMini } },
     });
-    await audit(ctx, 'COMMENT_CREATED', 'request', r.id, { commentId: c.id, title: r.title }, { clientId: r.clientId, clientVisible: true });
+    await audit(ctx, 'COMMENT_CREATED', 'request', r.id, { commentId: c.id });
     const recipients = isClient ? await staffRecipients(r.clientId, r.campaignId) : await clientRecipients(r.clientId);
     await notify(recipients, { type: 'NEW_COMMENT', entity: 'request', entityId: r.id, data: { name: r.title, by: ctx.user.name } }, ctx.user.id);
     res.status(201).json({ item: c });

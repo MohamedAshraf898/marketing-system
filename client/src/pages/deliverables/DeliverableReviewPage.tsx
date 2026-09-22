@@ -16,7 +16,6 @@ import { Field, Textarea } from '@/components/ui/Form';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { CommentsCard } from '@/components/shared/Comments';
 import { DeliverablePreview, FileTypeIcon } from '@/components/shared/Media';
-import { ProofingPanel } from '@/components/shared/ProofingPanel';
 import { DeliverableFormModal } from '@/components/forms/DeliverableFormModal';
 import { UploadFileModal } from '@/components/forms/UploadFileModal';
 
@@ -181,8 +180,6 @@ export function DeliverableReviewPage() {
               {files.length > 0 && (<><CardHeader title={t('review.files')} className={d.description ? 'border-t border-line pt-5' : ''} /><CardBody><FilesByVersion files={files} /></CardBody></>)}
             </Card>
           )}
-
-          {files.length > 0 && <ProofingPanel deliverableId={id} files={files} />}
 
           <CommentsCard basePath={`/deliverables/${id}`} />
         </div>

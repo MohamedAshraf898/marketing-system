@@ -12,7 +12,7 @@ import { FilterBar, FilterSelect, SearchInput, useDebounced, useEnumOptions } fr
 import { Pagination } from '@/components/ui/Pagination';
 import { useClientOptions } from '@/components/shared/options';
 
-export function RequestsPanel({ campaignId, clientId: fixedClientId, toolbar }: { campaignId?: string; clientId?: string; toolbar?: ReactNode }) {
+export function RequestsPanel({ campaignId, toolbar }: { campaignId?: string; toolbar?: ReactNode }) {
   const { t, fmt, label } = useI18n();
   const { user } = useAuth();
   const staff = user?.role !== 'CLIENT';
@@ -23,11 +23,11 @@ export function RequestsPanel({ campaignId, clientId: fixedClientId, toolbar }: 
   const [clientId, setClientId] = useState('');
   const [page, setPage] = useState(1);
   const q = useDebounced(search);
-  const list = useApi<Paged<RequestRow>>('/requests', { q, status, priority, type, clientId: fixedClientId ?? clientId, campaignId, page });
+  const list = useApi<Paged<RequestRow>>('/requests', { q, status, priority, type, clientId, campaignId, page });
   const statusOptions = useEnumOptions('requestStatus', REQUEST_STATUSES);
   const priorityOptions = useEnumOptions('priority', REQUEST_PRIORITIES);
   const typeOptions = useEnumOptions('requestType', REQUEST_TYPES);
-  const { clients } = useClientOptions(staff && !campaignId && !fixedClientId);
+  const { clients } = useClientOptions(staff && !campaignId);
   const reset = () => setPage(1);
 
   return (
@@ -37,7 +37,7 @@ export function RequestsPanel({ campaignId, clientId: fixedClientId, toolbar }: 
         <FilterSelect value={status} onChange={(v) => { setStatus(v); reset(); }} allLabel={t('common.allStatuses')} options={statusOptions} />
         <FilterSelect value={priority} onChange={(v) => { setPriority(v); reset(); }} allLabel={t('request.allPriorities')} options={priorityOptions} />
         <FilterSelect value={type} onChange={(v) => { setType(v); reset(); }} allLabel={t('request.allTypes')} options={typeOptions} />
-        {staff && !campaignId && !fixedClientId && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
+        {staff && !campaignId && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
         {toolbar && <div className="col-span-2 sm:ms-auto">{toolbar}</div>}
       </FilterBar>
       {list.isError ? <ErrorState onRetry={() => void list.refetch()} /> : list.isLoading ? <SkeletonRows /> : !list.data?.items.length ? (

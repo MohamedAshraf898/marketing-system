@@ -8,9 +8,7 @@ import { IconButton } from '@/components/ui/Button';
 import { CompanyMark } from '@/components/shared/Media';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { LogoMark, Wordmark } from './Logo';
-import { GlobalSearch } from './GlobalSearch';
-import { BOTTOM, navSections, type NavItem } from './nav';
-import { TimerWidget } from './TimerWidget';
+import { NAV, BOTTOM, type NavItem } from './nav';
 import { NotificationBell } from './NotificationBell';
 import { UserMenu } from './UserMenu';
 
@@ -41,10 +39,12 @@ function SideLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, can } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   if (!user) return null;
-  const sections = navSections(user.role, can);
+  const items = NAV[user.role];
+  const main = items.filter((i) => i.to !== '/audit-log');
+  const system = items.filter((i) => i.to === '/audit-log');
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 px-5 pb-4 pt-6">
@@ -70,12 +70,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3" aria-label="Main">
-        {sections.map((s, idx) => (
-          <div key={idx} className="space-y-1">
-            {s.title && <p className="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{t(s.title)}</p>}
-            {s.items.map((i) => <SideLink key={i.to} item={i} onNavigate={onNavigate} />)}
-          </div>
-        ))}
+        {main.map((i) => <SideLink key={i.to} item={i} onNavigate={onNavigate} />)}
+        {system.length > 0 && (
+          <>
+            <p className="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{t('shell.system')}</p>
+            {system.map((i) => <SideLink key={i.to} item={i} onNavigate={onNavigate} />)}
+          </>
+        )}
       </nav>
       <p className="px-6 py-4 text-[11px] text-zinc-600">OG System · v1.0</p>
     </div>
@@ -83,7 +84,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function AppShell() {
-  const { user, can } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const loc = useLocation();
   const [drawer, setDrawer] = useState(false);
@@ -95,8 +96,7 @@ export function AppShell() {
   }, [drawer]);
 
   if (!user) return null;
-  const all = navSections(user.role, can).flatMap((s) => s.items);
-  const bottom = BOTTOM[user.role].map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i);
+  const bottom = NAV[user.role].filter((i) => BOTTOM[user.role].includes(i.to));
 
   return (
     <div className="min-h-dvh">
@@ -128,10 +128,7 @@ export function AppShell() {
               <LogoMark className="size-8" />
               <Wordmark />
             </div>
-            <div className="flex flex-1 items-center justify-end gap-2 sm:justify-between">
-              <GlobalSearch />
-              <TimerWidget />
-            </div>
+            <div className="flex-1" />
             <LanguageSwitcher />
             <NotificationBell />
             <UserMenu />
@@ -145,7 +142,7 @@ export function AppShell() {
 
       {/* phone bottom bar */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur-md lg:hidden pb-safe" aria-label="Quick">
-        <ul className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${bottom.length + 1}, minmax(0, 1fr))` }}>
+        <ul className="mx-auto grid max-w-lg grid-cols-5">
           {bottom.map((i) => {
             const Icon = i.icon;
             return (

@@ -26,14 +26,7 @@ export function Badge({ tone = 'neutral', dot = true, children, className }: { t
 }
 
 const TONE_MAP: Record<string, Record<string, Tone>> = {
-  clientStatus: { LEAD: 'blue', PROSPECT: 'violet', ONBOARDING: 'amber', ACTIVE: 'green', PAUSED: 'orange', CHURNED: 'red', ARCHIVED: 'neutral' },
-  onboardingStatus: { NOT_STARTED: 'neutral', IN_PROGRESS: 'amber', COMPLETED: 'green' },
-  projectStatus: { PLANNING: 'neutral', IN_PROGRESS: 'blue', REVIEW: 'violet', CLIENT_APPROVAL: 'amber', COMPLETED: 'green', ON_HOLD: 'orange', CANCELLED: 'red' },
-  taskStatus: { TODO: 'neutral', IN_PROGRESS: 'blue', REVIEW: 'violet', BLOCKED: 'red', DONE: 'green' },
-  contentStatus: { IDEA: 'neutral', DRAFT: 'blue', IN_REVIEW: 'violet', CLIENT_APPROVAL: 'amber', APPROVED: 'green', SCHEDULED: 'teal', PUBLISHED: 'green', REJECTED: 'red' },
-  approvalStatus: { NOT_SUBMITTED: 'neutral', PENDING: 'amber', APPROVED: 'green', CHANGES_REQUESTED: 'red' },
-  contractStatus: { DRAFT: 'neutral', ACTIVE: 'green', EXPIRING: 'amber', EXPIRED: 'red', TERMINATED: 'neutral' },
-  invoiceStatus: { DRAFT: 'neutral', SENT: 'blue', PENDING: 'amber', PAID: 'green', OVERDUE: 'red', CANCELLED: 'neutral' },
+  clientStatus: { ACTIVE: 'green', PAUSED: 'amber', ARCHIVED: 'neutral' },
   userStatus: { ACTIVE: 'green', INACTIVE: 'neutral' },
   campaignStatus: { PLANNING: 'neutral', PENDING_APPROVAL: 'amber', RUNNING: 'green', PAUSED: 'orange', COMPLETED: 'blue' },
   deliverableStatus: { DRAFT: 'neutral', PENDING_APPROVAL: 'amber', APPROVED: 'green', CHANGES_REQUESTED: 'red', PUBLISHED: 'violet' },

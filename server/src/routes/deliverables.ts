@@ -3,8 +3,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { DELIVERABLE_STATUSES, DELIVERABLE_TYPES } from '../../../shared/src/enums';
 import { authenticate, clientOnly, staffOnly } from '../auth/middleware';
-import { requirePerm } from '../authz/permissions';
-import { contentWhere, deliverableWhere, fileWhere, isClient, projectWhere, type Scope } from '../authz/scope';
+import { deliverableWhere, fileWhere } from '../authz/scope';
 import { resolveTarget } from '../authz/targets';
 import { prisma } from '../db';
 import { ctxOf } from '../lib/context';
@@ -17,7 +16,6 @@ import {
 } from '../services/deliverables';
 import { clientRecipients, notify, staffRecipients } from '../services/notifications';
 import { and, fileSelect, userMini } from '../services/serializers';
-import { proofingRouter } from './proofing';
 
 export const deliverablesRouter = Router();
 deliverablesRouter.use(authenticate);
@@ -41,7 +39,6 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(160),
   clientId: z.string().optional(),
   campaignId: z.string().nullish(),
-  projectId: z.string().min(1).nullish(),
   type: z.enum(DELIVERABLE_TYPES),
   previewUrl: httpUrl.nullish().or(z.literal('')),
   description: z.string().trim().max(5000).nullish(),
@@ -55,32 +52,13 @@ const updateSchema = z
     previewUrl: httpUrl.nullable().or(z.literal('')),
     description: z.string().trim().max(5000).nullable(),
     dueDate: dateStr.nullable(),
-    projectId: z.string().min(1).nullable(),
   })
   .partial()
   .strict();
 
-/** A deliverable may only be linked to a project the caller can see AND that belongs to the same client. */
-async function assertProjectLink(scope: Scope, projectId: string | null | undefined, clientId: string) {
-  if (!projectId) return;
-  const p = await prisma.project.findFirst({ where: and<Prisma.ProjectWhereInput>({ id: projectId }, projectWhere(scope)), select: { clientId: true } });
-  if (!p || p.clientId !== clientId) throw Errors.validation({ projectId: 'invalid_choice' });
-}
-
-/** Clients never learn about internal (not client-visible) projects through a deliverable. */
-function shapeProject<T extends { projectId: string | null; project?: { id: string; name: string; visibleToClient: boolean } | null }>(scope: Scope, row: T) {
-  const { project, ...rest } = row;
-  if (isClient(scope)) {
-    const visible = !!project && project.visibleToClient;
-    return { ...rest, projectId: visible ? row.projectId : null, project: visible ? { id: project!.id, name: project!.name } : null };
-  }
-  return { ...rest, project: project ? { id: project.id, name: project.name } : null };
-}
-
 const includeLists = {
   campaign: { select: { id: true, name: true } },
   client: { select: { id: true, companyName: true } },
-  project: { select: { id: true, name: true, visibleToClient: true } },
 } satisfies Prisma.DeliverableInclude;
 
 deliverablesRouter.get(
@@ -93,47 +71,42 @@ deliverablesRouter.get(
     const type = qsEnum(req.query, 'type', DELIVERABLE_TYPES);
     const campaignId = qs(req.query, 'campaignId');
     const clientId = qs(req.query, 'clientId');
-    const projectId = qs(req.query, 'projectId');
     const where = and<Prisma.DeliverableWhereInput>(
       deliverableWhere(scope),
       status ? { status } : undefined,
       type ? { type } : undefined,
       campaignId ? { campaignId } : undefined,
       clientId ? { clientId } : undefined,
-      projectId ? (isClient(scope) ? { projectId, project: { is: { visibleToClient: true } } } : { projectId }) : undefined,
       q ? { OR: [{ name: { contains: q } }, { description: { contains: q } }] } : undefined,
     );
     const [total, rows] = await Promise.all([
       prisma.deliverable.count({ where }),
       prisma.deliverable.findMany({ where, orderBy: { updatedAt: 'desc' }, skip: p.skip, take: p.take, include: includeLists }),
     ]);
-    res.json({ items: (await attachPreviews(scope, rows)).map((r) => shapeProject(scope, r)), meta: pageMeta(p, total) });
+    res.json({ items: await attachPreviews(scope, rows), meta: pageMeta(p, total) });
   }),
 );
 
 deliverablesRouter.post(
   '/',
   staffOnly,
-  requirePerm('deliverables.create'),
   asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const body = parse(createSchema, req.body);
     const target = await resolveTarget(ctx.scope, { clientId: body.clientId, campaignId: body.campaignId });
-    await assertProjectLink(ctx.scope, body.projectId, target.clientId);
     const d = await prisma.deliverable.create({
       data: {
         name: body.name,
         type: body.type,
         clientId: target.clientId,
         campaignId: target.campaign?.id ?? null,
-        projectId: body.projectId ?? null,
         previewUrl: body.previewUrl || null,
         description: body.description || null,
         dueDate: body.dueDate ?? null,
         createdById: ctx.user.id,
       },
     });
-    await audit(ctx, 'DELIVERABLE_CREATED', 'deliverable', d.id, { name: d.name, type: d.type }, { clientId: d.clientId, projectId: d.projectId });
+    await audit(ctx, 'DELIVERABLE_CREATED', 'deliverable', d.id, { name: d.name, type: d.type });
     res.status(201).json({ item: d });
   }),
 );
@@ -151,32 +124,23 @@ deliverablesRouter.get(
     const { _count, ...rest } = d;
     void _count;
     const [withPreview] = await attachPreviews(scope, [rest]);
-    // staff only: the content calendar item this deliverable was created from (never sent to clients)
-    const contentItem = isClient(scope)
-      ? undefined
-      : await prisma.contentItem.findFirst({
-          where: and<Prisma.ContentItemWhereInput>({ deliverableId: d.id }, contentWhere(scope)),
-          select: { id: true, title: true, status: true, platform: true, contentType: true, publishDate: true },
-        });
-    res.json({ item: { ...shapeProject(scope, withPreview), files, permissions: deliverablePermissions(user.role, d.status), ...(contentItem ? { contentItem } : {}) } });
+    res.json({ item: { ...withPreview, files, permissions: deliverablePermissions(user.role, d.status) } });
   }),
 );
 
 deliverablesRouter.patch(
   '/:id',
   staffOnly,
-  requirePerm('deliverables.create'),
   asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const d = await findDeliverable(ctx.scope, idParam(req));
     const body = parse(updateSchema, req.body);
     if (d.status !== 'DRAFT') throw Errors.conflict('DELIVERABLE_LOCKED', 'Only drafts can be edited. Start a new version first.');
-    if (body.projectId !== undefined) await assertProjectLink(ctx.scope, body.projectId, d.clientId);
     const updated = await prisma.deliverable.update({
       where: { id: d.id },
       data: { ...body, ...('previewUrl' in body ? { previewUrl: body.previewUrl || null } : {}) },
     });
-    await audit(ctx, 'DELIVERABLE_UPDATED', 'deliverable', d.id, { fields: Object.keys(body), name: d.name }, { clientId: d.clientId });
+    await audit(ctx, 'DELIVERABLE_UPDATED', 'deliverable', d.id, { fields: Object.keys(body) });
     res.json({ item: updated });
   }),
 );
@@ -185,7 +149,6 @@ deliverablesRouter.patch(
 deliverablesRouter.post(
   '/:id/submit',
   staffOnly,
-  requirePerm('deliverables.create'),
   asyncHandler(async (req, res) => {
     res.json({ item: await submitDeliverable(ctxOf(req), idParam(req)) });
   }),
@@ -194,7 +157,6 @@ deliverablesRouter.post(
 deliverablesRouter.post(
   '/:id/new-version',
   staffOnly,
-  requirePerm('deliverables.create'),
   asyncHandler(async (req, res) => {
     res.json({ item: await startNewVersion(ctxOf(req), idParam(req)) });
   }),
@@ -203,7 +165,6 @@ deliverablesRouter.post(
 deliverablesRouter.post(
   '/:id/publish',
   staffOnly,
-  requirePerm('deliverables.approve'),
   asyncHandler(async (req, res) => {
     res.json({ item: await publishDeliverable(ctxOf(req), idParam(req)) });
   }),
@@ -230,9 +191,6 @@ deliverablesRouter.post(
     res.json({ item: await decideDeliverable(ctxOf(req), idParam(req), 'CHANGES_REQUESTED', body.comment) });
   }),
 );
-
-// ── proofing (pins / timestamps on the files; never changes an approval record) ──
-deliverablesRouter.use('/:id/proofing', proofingRouter);
 
 // ── history & comments ──
 deliverablesRouter.get(
@@ -275,7 +233,7 @@ deliverablesRouter.post(
       data: { deliverableId: d.id, clientId: d.clientId, userId: ctx.user.id, authorType: isClient ? 'CLIENT' : 'TEAM', comment: body.comment },
       include: { user: { select: userMini } },
     });
-    await audit(ctx, 'COMMENT_CREATED', 'deliverable', d.id, { commentId: c.id, name: d.name }, { clientId: d.clientId, clientVisible: d.submittedAt !== null });
+    await audit(ctx, 'COMMENT_CREATED', 'deliverable', d.id, { commentId: c.id });
     const recipients = isClient ? await staffRecipients(d.clientId, d.campaignId) : d.submittedAt ? await clientRecipients(d.clientId) : [];
     await notify(recipients, { type: 'NEW_COMMENT', entity: 'deliverable', entityId: d.id, data: { name: d.name, by: ctx.user.name } }, ctx.user.id);
     res.status(201).json({ item: c });

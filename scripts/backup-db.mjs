@@ -19,7 +19,7 @@ if (!fs.existsSync(dbPath)) {
   process.exit(1);
 }
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const dir = process.env.BACKUP_DIR ? path.resolve(process.env.BACKUP_DIR) : path.join(root, 'backups');
+const dir = path.join(root, 'backups');
 fs.mkdirSync(dir, { recursive: true });
 const target = path.join(dir, `og-system-${stamp}.db`);
 
@@ -29,5 +29,4 @@ const client = createClient({ url: `file:${dbPath}` });
 await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
 client.close();
 console.log(`Database backed up to ${target}`);
-const uploads = process.env.UPLOAD_DIR ? path.resolve(root, process.env.UPLOAD_DIR) : path.join(root, 'uploads');
-console.log('Uploaded files live in the uploads folder - copy it too:  ' + uploads);
+console.log('Uploaded files live in the uploads folder - copy it too:  ' + path.join(root, 'uploads'));

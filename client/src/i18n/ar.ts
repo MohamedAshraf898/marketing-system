@@ -1,24 +1,7 @@
 // Arabic dictionary (Modern Standard Arabic). Must contain every key of en.ts - TypeScript enforces it.
 import type { TKey } from './en';
 
-import { coreAr } from './p2/core.ar';
-import { crmAr } from './p2/crm.ar';
-import { workAr } from './p2/work.ar';
-import { timeAr } from './p2/time.ar';
-import { contentAr } from './p2/content.ar';
-import { financeAr } from './p2/finance.ar';
-import { insightsAr } from './p2/insights.ar';
-import { adminAr } from './p2/admin.ar';
 export const ar: Record<TKey, string> = {
-  ...coreAr,
-  ...crmAr,
-  ...workAr,
-  ...timeAr,
-  ...contentAr,
-  ...financeAr,
-  ...insightsAr,
-  ...adminAr,
-
   'app.name': 'نظام OG',
 
   // ── التنقل ──

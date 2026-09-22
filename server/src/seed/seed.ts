@@ -11,12 +11,6 @@ import { hashPassword, passwordProblem } from '../auth/password';
 import { prisma } from '../db';
 import { storage } from '../storage';
 import { makeDemoImage } from './png';
-import type { SeedCtx } from './ctx';
-import { seedContent } from './seedContent';
-import { seedCrm } from './seedCrm';
-import { seedFinance } from './seedFinance';
-import { seedTime } from './seedTime';
-import { seedWork } from './seedWork';
 
 const DAY = 86_400_000;
 const daysAgo = (n: number, hour = 10) => new Date(Date.now() - n * DAY + (hour - 12) * 3_600_000);
@@ -42,12 +36,9 @@ async function wipe() {
   // children first
   await prisma.$transaction([
     prisma.notification.deleteMany(), prisma.auditLog.deleteMany(), prisma.comment.deleteMany(), prisma.file.deleteMany(),
-    prisma.timeEntry.deleteMany(), prisma.taskComment.deleteMany(), prisma.taskChecklistItem.deleteMany(), prisma.proofingComment.deleteMany(),
-    prisma.task.deleteMany(), prisma.milestone.deleteMany(), prisma.contentItem.deleteMany(), prisma.onboardingItem.deleteMany(),
-    prisma.invoice.deleteMany(), prisma.contract.deleteMany(), prisma.internalNote.deleteMany(), prisma.clientContact.deleteMany(),
     prisma.approval.deleteMany(), prisma.report.deleteMany(), prisma.request.deleteMany(), prisma.deliverable.deleteMany(),
     prisma.campaignAssignment.deleteMany(), prisma.clientAssignment.deleteMany(), prisma.session.deleteMany(),
-    prisma.campaign.deleteMany(), prisma.project.deleteMany(), prisma.user.deleteMany(), prisma.client.deleteMany(), prisma.appSettings.deleteMany(),
+    prisma.campaign.deleteMany(), prisma.user.deleteMany(), prisma.client.deleteMany(),
   ]);
 }
 
@@ -294,14 +285,6 @@ async function main() {
   await a(sara.id, 'CAMPAIGN_UPDATED', 'campaign', L1.id, { fields: ['status'], status: { from: 'PLANNING', to: 'RUNNING' } }, 39);
   await a(lumenUser.id, 'COMMENT_CREATED', 'deliverable', d2.id, {}, 0.5);
   await a(sara.id, 'REQUEST_STATUS_CHANGED', 'request', r1.id, { from: 'NEW', to: 'IN_PROGRESS' }, 5);
-
-  // ── phase 2 demo data (each group seeds its own tables; order matters: work before time) ──
-  const ctx: SeedCtx = { admin, sara, omar, lumen, ufuq, lumenUser, ufuqUser, campaigns: { L1, L2, L3, U1, U2, U3 }, daysAgo, dayOnly };
-  await seedCrm(ctx);
-  await seedWork(ctx);
-  await seedContent(ctx);
-  await seedFinance(ctx);
-  await seedTime(ctx);
 
   console.log('\nDemo data loaded.\n');
   console.log('  ROLE     EMAIL                      PASSWORD');

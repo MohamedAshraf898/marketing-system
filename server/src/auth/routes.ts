@@ -8,7 +8,6 @@ import { Errors } from '../lib/errors';
 import { asyncHandler, parse } from '../lib/http';
 import { ctxOf } from '../lib/context';
 import { audit } from '../services/audit';
-import { effectivePermissions } from '../authz/permissions';
 import { authenticate } from './middleware';
 import { DUMMY_HASH, hashPassword, passwordProblem, verifyPassword } from './password';
 import { clearSessionCookie, createSession, deleteSessionByToken, deleteUserSessions } from './sessions';
@@ -35,15 +34,13 @@ async function publicUser(userId: string) {
   const u = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
-      id: true, name: true, email: true, role: true, clientId: true, avatar: true, locale: true, lastLoginAt: true, jobTitle: true, permissions: true,
+      id: true, name: true, email: true, role: true, clientId: true, avatar: true, locale: true, lastLoginAt: true,
       client: { select: { id: true, name: true, companyName: true, logo: true, status: true } },
     },
   });
-  const { client, permissions, ...rest } = u;
+  const { client, ...rest } = u;
   return {
     ...rest,
-    // effective permissions (the web app only uses them to hide buttons; the API enforces them)
-    permissions: [...effectivePermissions({ role: u.role, permissions })],
     client: client ? { id: client.id, name: client.name, companyName: client.companyName, status: client.status, hasLogo: !!client.logo } : null,
   };
 }

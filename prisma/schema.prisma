@@ -14,27 +14,9 @@ datasource db {
 // ─────────────────────────── Enums ───────────────────────────
 
 enum ClientStatus {
-  LEAD
-  PROSPECT
-  ONBOARDING
   ACTIVE
   PAUSED
-  CHURNED
   ARCHIVED
-}
-
-enum ClientType {
-  BUSINESS
-  STARTUP
-  ENTERPRISE
-  NONPROFIT
-  INDIVIDUAL
-}
-
-enum OnboardingStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  COMPLETED
 }
 
 enum Role {
@@ -124,86 +106,11 @@ enum AuthorType {
   TEAM
 }
 
-// Shared by projects and tasks (same values as RequestPriority, kept separate on purpose).
-enum Priority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
-
-enum ProjectStatus {
-  PLANNING
-  IN_PROGRESS
-  REVIEW
-  CLIENT_APPROVAL
-  COMPLETED
-  ON_HOLD
-  CANCELLED
-}
-
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  REVIEW
-  BLOCKED
-  DONE
-}
-
-enum SocialPlatform {
-  INSTAGRAM
-  FACEBOOK
-  TIKTOK
-  LINKEDIN
-  YOUTUBE
-  X
-  OTHER
-}
-
-enum ContentType {
-  POST
-  CAROUSEL
-  REEL
-  STORY
-  VIDEO
-  ARTICLE
-  AD
-  OTHER
-}
-
-enum ContentStatus {
-  IDEA
-  DRAFT
-  IN_REVIEW
-  CLIENT_APPROVAL
-  APPROVED
-  SCHEDULED
-  PUBLISHED
-  REJECTED
-}
-
-enum ContractStatus {
-  DRAFT
-  ACTIVE
-  EXPIRING
-  EXPIRED
-  TERMINATED
-}
-
-enum InvoiceStatus {
-  DRAFT
-  SENT
-  PENDING
-  PAID
-  OVERDUE
-  CANCELLED
-}
-
 // ─────────────────────────── Models ───────────────────────────
 
 model Client {
   id          String       @id @default(cuid())
-  name        String // main contact person (kept from phase 1)
+  name        String
   companyName String
   email       String
   phone       String?
@@ -212,87 +119,17 @@ model Client {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  // ── CRM (phase 2) ──
-  industry         String?
-  website          String?
-  address          String?
-  country          String?
-  city             String?
-  leadSource       String?
-  accountManagerId String?
-  clientType       ClientType       @default(BUSINESS)
-  tags             String? // JSON array of strings
-  notes            String? // CLIENT-VISIBLE note
-  onboardingStatus OnboardingStatus @default(NOT_STARTED)
-  clientSince      DateTime?
-  contractStart    DateTime?
-  contractEnd      DateTime?
-  monthlyRetainer  Float? // staff only
-  internalNotes    String? // staff only - NEVER sent to CLIENT users
-
-  accountManager User? @relation("AccountManager", fields: [accountManagerId], references: [id])
-
-  users           User[]
-  campaigns       Campaign[]
-  deliverables    Deliverable[]
-  approvals       Approval[]
-  requests        Request[]
-  reports         Report[]
-  comments        Comment[]
-  files           File[]
-  assignments     ClientAssignment[]
-  contacts        ClientContact[]
-  projects        Project[]
-  tasks           Task[]
-  contentItems    ContentItem[]
-  contracts       Contract[]
-  invoices        Invoice[]
-  onboardingItems OnboardingItem[]
-  internalNoteRows InternalNote[]
-  timeEntries     TimeEntry[]
+  users        User[]
+  campaigns    Campaign[]
+  deliverables Deliverable[]
+  approvals    Approval[]
+  requests     Request[]
+  reports      Report[]
+  comments     Comment[]
+  files        File[]
+  assignments  ClientAssignment[]
 
   @@index([status])
-  @@index([accountManagerId])
-  @@index([companyName])
-}
-
-model ClientContact {
-  id              String   @id @default(cuid())
-  clientId        String
-  name            String
-  jobTitle        String?
-  email           String?
-  phone           String?
-  whatsapp        String?
-  avatar          String? // storage key (never exposed directly)
-  isPrimary       Boolean  @default(false)
-  visibleToClient Boolean  @default(true)
-  notes           String? // internal, never sent to CLIENT users
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId, isPrimary])
-}
-
-// Staff-only notes about a client (optionally about one project). CLIENT users can never read these.
-model InternalNote {
-  id        String   @id @default(cuid())
-  clientId  String
-  projectId String?
-  authorId  String
-  body      String
-  pinned    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  author  User     @relation("InternalNoteAuthor", fields: [authorId], references: [id])
-
-  @@index([clientId, createdAt])
-  @@index([projectId])
 }
 
 model User {
@@ -309,11 +146,6 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  // ── phase 2 ──
-  jobTitle            String?
-  permissions         String? // JSON array of granted permission keys (TEAM). null = role defaults. ADMIN always has all.
-  weeklyCapacityHours Int     @default(40)
-
   client Client? @relation(fields: [clientId], references: [id])
 
   sessions            Session[]
@@ -327,22 +159,6 @@ model User {
   filesUploaded       File[]
   notifications       Notification[]
   auditLogs           AuditLog[]
-
-  accountManagerOf    Client[]        @relation("AccountManager")
-  projectsManaged     Project[]       @relation("ProjectManager")
-  projectsCreated     Project[]       @relation("ProjectCreator")
-  tasksAssigned       Task[]          @relation("TaskAssignee")
-  tasksCreated        Task[]          @relation("TaskCreator")
-  taskComments        TaskComment[]
-  contentAssigned     ContentItem[]   @relation("ContentAssignee")
-  contentCreated      ContentItem[]   @relation("ContentCreator")
-  onboardingAssigned  OnboardingItem[] @relation("OnboardingAssignee")
-  onboardingCompleted OnboardingItem[] @relation("OnboardingCompleter")
-  timeEntries         TimeEntry[]
-  internalNotes       InternalNote[]  @relation("InternalNoteAuthor")
-  proofingComments    ProofingComment[]
-  contractsCreated    Contract[]      @relation("ContractCreator")
-  invoicesCreated     Invoice[]       @relation("InvoiceCreator")
 
   @@index([role])
   @@index([clientId])
@@ -404,14 +220,10 @@ model Campaign {
   spent              Float          @default(0)
   description        String?
   campaignExternalId String? // id of the campaign inside Meta/Google/TikTok (future integrations)
-  projectId          String?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
   client       Client               @relation(fields: [clientId], references: [id])
-  project      Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  tasks        Task[]
-  contentItems ContentItem[]
   deliverables Deliverable[]
   requests     Request[]
   reports      Report[]
@@ -420,9 +232,6 @@ model Campaign {
 
   @@index([clientId])
   @@index([status])
-  @@index([projectId])
-  @@index([startDate])
-  @@index([endDate])
 }
 
 model Deliverable {
@@ -440,24 +249,18 @@ model Deliverable {
   approvedAt  DateTime?
   clientComment String? // latest feedback written by the client
   createdById String?
-  projectId   String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
   client    Client     @relation(fields: [clientId], references: [id])
   campaign  Campaign?  @relation(fields: [campaignId], references: [id])
-  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy User?      @relation("DeliverableCreator", fields: [createdById], references: [id])
   approvals Approval[]
   comments  Comment[]
   files     File[]
-  proofing  ProofingComment[]
-  contentItem ContentItem?
 
   @@index([clientId, status])
   @@index([campaignId])
-  @@index([projectId])
-  @@index([dueDate])
 }
 
 // APPEND-ONLY history. Rows are only ever inserted, never updated or deleted.
@@ -538,7 +341,6 @@ model Comment {
   id            String     @id @default(cuid())
   deliverableId String?
   requestId     String?
-  projectId     String? // project comments are shared with the client (internal talk uses TaskComment / InternalNote)
   clientId      String
   userId        String
   authorType    AuthorType
@@ -547,13 +349,11 @@ model Comment {
 
   deliverable Deliverable? @relation(fields: [deliverableId], references: [id])
   request     Request?     @relation(fields: [requestId], references: [id])
-  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   client      Client       @relation(fields: [clientId], references: [id])
   user        User         @relation(fields: [userId], references: [id])
 
   @@index([deliverableId, createdAt])
   @@index([requestId, createdAt])
-  @@index([projectId, createdAt])
   @@index([clientId])
 }
 
@@ -567,12 +367,6 @@ model File {
   campaignId      String?
   deliverableId   String?
   requestId       String?
-  projectId       String?
-  contentItemId   String?
-  taskId          String? // staff-only attachments
-  onboardingItemId String? // staff-only
-  contractId      String?
-  invoiceId       String?
   version         Int      @default(1)
   visibleToClient Boolean  @default(true)
   uploadedById    String
@@ -582,25 +376,12 @@ model File {
   campaign    Campaign?    @relation(fields: [campaignId], references: [id])
   deliverable Deliverable? @relation(fields: [deliverableId], references: [id])
   request     Request?     @relation(fields: [requestId], references: [id])
-  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  contentItem ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
-  task        Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  onboardingItem OnboardingItem? @relation(fields: [onboardingItemId], references: [id], onDelete: SetNull)
-  contract    Contract?    @relation(fields: [contractId], references: [id], onDelete: SetNull)
-  invoice     Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   uploadedBy  User         @relation(fields: [uploadedById], references: [id])
-  proofingComments ProofingComment[]
 
   @@index([clientId, createdAt])
   @@index([campaignId])
   @@index([deliverableId])
   @@index([requestId])
-  @@index([projectId])
-  @@index([contentItemId])
-  @@index([taskId])
-  @@index([onboardingItemId])
-  @@index([contractId])
-  @@index([invoiceId])
 }
 
 model Notification {
@@ -627,310 +408,12 @@ model AuditLog {
   entityId  String?
   metadata  String? // JSON
   ip        String?
-  // phase 2: the audit trail doubles as the activity feed. clientVisible rows may be shown to that client's own users.
-  clientId      String?
-  projectId     String?
-  clientVisible Boolean  @default(false)
   createdAt DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
-  @@index([clientId, createdAt])
-  @@index([projectId, createdAt])
   @@index([createdAt])
   @@index([entity, entityId])
   @@index([action])
   @@index([userId])
-}
-
-// ─────────────────────────── Phase 2: agency management ───────────────────────────
-
-model Project {
-  id              String        @id @default(cuid())
-  clientId        String
-  name            String
-  description     String?
-  status          ProjectStatus @default(PLANNING)
-  priority        Priority      @default(NORMAL)
-  startDate       DateTime?
-  dueDate         DateTime?
-  completedAt     DateTime?
-  projectManagerId String?
-  budget          Float? // staff only
-  visibleToClient Boolean       @default(true) // false = internal-only project
-  createdById     String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  client         Client   @relation(fields: [clientId], references: [id])
-  projectManager User?    @relation("ProjectManager", fields: [projectManagerId], references: [id])
-  createdBy      User?    @relation("ProjectCreator", fields: [createdById], references: [id])
-  milestones     Milestone[]
-  tasks          Task[]
-  campaigns      Campaign[]
-  deliverables   Deliverable[]
-  contentItems   ContentItem[]
-  files          File[]
-  comments       Comment[]
-  invoices       Invoice[]
-  timeEntries    TimeEntry[]
-  internalNotes  InternalNote[]
-
-  @@index([clientId, status])
-  @@index([status, dueDate])
-  @@index([projectManagerId])
-}
-
-model Milestone {
-  id          String    @id @default(cuid())
-  projectId   String
-  title       String
-  description String?
-  dueDate     DateTime?
-  completedAt DateTime?
-  position    Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, position])
-}
-
-// Tasks are INTERNAL agency work: CLIENT users can never read them.
-model Task {
-  id             String     @id @default(cuid())
-  projectId      String?
-  clientId       String?
-  campaignId     String?
-  title          String
-  description    String?
-  assignedToId   String?
-  createdById    String?
-  priority       Priority   @default(NORMAL)
-  status         TaskStatus @default(TODO)
-  dueDate        DateTime?
-  completedAt    DateTime?
-  estimatedHours Float?
-  actualHours    Float      @default(0)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-
-  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  client     Client?   @relation(fields: [clientId], references: [id])
-  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  assignedTo User?     @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  createdBy  User?     @relation("TaskCreator", fields: [createdById], references: [id])
-  checklist  TaskChecklistItem[]
-  comments   TaskComment[]
-  files      File[]
-  timeEntries TimeEntry[]
-
-  @@index([assignedToId, status])
-  @@index([clientId, status])
-  @@index([projectId, status])
-  @@index([campaignId])
-  @@index([dueDate])
-  @@index([status, dueDate])
-}
-
-model TaskChecklistItem {
-  id          String    @id @default(cuid())
-  taskId      String
-  text        String
-  done        Boolean   @default(false)
-  position    Int       @default(0)
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId, position])
-}
-
-// Internal discussion on a task (staff only, never mixed with client-visible comments).
-model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  comment   String
-  createdAt DateTime @default(now())
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([taskId, createdAt])
-}
-
-// Content calendar entry. Client approval is NOT a second system: when sent for approval the item gets a linked
-// Deliverable and the normal (append-only) approval workflow runs on that deliverable.
-model ContentItem {
-  id            String         @id @default(cuid())
-  clientId      String
-  campaignId    String?
-  projectId     String?
-  title         String
-  platform      SocialPlatform @default(INSTAGRAM)
-  contentType   ContentType    @default(POST)
-  caption       String?
-  status        ContentStatus  @default(IDEA)
-  publishDate   DateTime?
-  assignedToId  String?
-  deliverableId String?        @unique
-  notes         String? // internal notes, staff only
-  createdById   String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  client      Client       @relation(fields: [clientId], references: [id])
-  campaign    Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  assignedTo  User?        @relation("ContentAssignee", fields: [assignedToId], references: [id])
-  createdBy   User?        @relation("ContentCreator", fields: [createdById], references: [id])
-  deliverable Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: SetNull)
-  files       File[]
-
-  @@index([clientId, publishDate])
-  @@index([status, publishDate])
-  @@index([campaignId])
-  @@index([projectId])
-  @@index([assignedToId])
-}
-
-// Pin (x,y as fractions 0..1 of the image) or video timestamp comment on a deliverable file.
-model ProofingComment {
-  id            String     @id @default(cuid())
-  deliverableId String
-  fileId        String?
-  version       Int
-  x             Float? // 0..1 from the left of the image
-  y             Float? // 0..1 from the top of the image
-  timestampSec  Float? // video comments (seconds)
-  comment       String
-  userId        String
-  authorType    AuthorType
-  resolved      Boolean    @default(false)
-  resolvedAt    DateTime?
-  resolvedById  String?
-  createdAt     DateTime   @default(now())
-
-  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
-  file        File?       @relation(fields: [fileId], references: [id], onDelete: SetNull)
-  user        User        @relation(fields: [userId], references: [id])
-
-  @@index([deliverableId, createdAt])
-  @@index([fileId])
-}
-
-model OnboardingItem {
-  id            String    @id @default(cuid())
-  clientId      String
-  title         String
-  description   String?
-  position      Int       @default(0)
-  done          Boolean   @default(false)
-  completedAt   DateTime?
-  completedById String?
-  assignedToId  String?
-  dueDate       DateTime?
-  notes         String? // internal
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  client      Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  assignedTo  User?  @relation("OnboardingAssignee", fields: [assignedToId], references: [id])
-  completedBy User?  @relation("OnboardingCompleter", fields: [completedById], references: [id])
-  files       File[]
-
-  @@index([clientId, position])
-  @@index([assignedToId])
-}
-
-model Contract {
-  id              String         @id @default(cuid())
-  clientId        String
-  name            String
-  contractNumber  String         @unique
-  startDate       DateTime?
-  endDate         DateTime?
-  renewalDate     DateTime?
-  value           Float          @default(0)
-  status          ContractStatus @default(DRAFT)
-  notes           String? // internal
-  visibleToClient Boolean        @default(false)
-  createdById     String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  client    Client @relation(fields: [clientId], references: [id])
-  createdBy User?  @relation("ContractCreator", fields: [createdById], references: [id])
-  files     File[]
-
-  @@index([clientId, status])
-  @@index([status, endDate])
-  @@index([renewalDate])
-}
-
-// Internal agency invoicing only. No payments, no subscriptions.
-model Invoice {
-  id              String        @id @default(cuid())
-  clientId        String
-  projectId       String?
-  invoiceNumber   String        @unique
-  issueDate       DateTime
-  dueDate         DateTime
-  amount          Float // subtotal
-  tax             Float         @default(0) // tax amount
-  total           Float // always amount + tax, computed by the server
-  status          InvoiceStatus @default(DRAFT)
-  description     String?
-  notes           String? // internal
-  paidAt          DateTime?
-  visibleToClient Boolean       @default(false)
-  createdById     String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  client    Client   @relation(fields: [clientId], references: [id])
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdBy User?    @relation("InvoiceCreator", fields: [createdById], references: [id])
-  files     File[]
-
-  @@index([clientId, status])
-  @@index([status, dueDate])
-}
-
-model TimeEntry {
-  id          String    @id @default(cuid())
-  userId      String
-  taskId      String?
-  projectId   String?
-  clientId    String?
-  startedAt   DateTime
-  endedAt     DateTime? // null = timer still running
-  durationSec Int       @default(0)
-  notes       String?
-  createdAt   DateTime  @default(now())
-
-  user    User     @relation(fields: [userId], references: [id])
-  task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  client  Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
-
-  @@index([userId, startedAt])
-  @@index([userId, endedAt])
-  @@index([clientId, startedAt])
-  @@index([projectId])
-  @@index([taskId])
-}
-
-// Single row (id = "singleton"): agency name, colours, logo and favicon.
-model AppSettings {
-  id             String   @id @default("singleton")
-  agencyName     String   @default("OG System")
-  primaryColor   String   @default("#4f46e5")
-  secondaryColor String   @default("#0f172a")
-  logoKey        String?
-  faviconKey     String?
-  updatedAt      DateTime @updatedAt
 }

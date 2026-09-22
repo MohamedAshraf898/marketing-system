@@ -34,22 +34,20 @@ export function DeliverableCard({ d, showClient }: { d: Deliverable; showClient?
   );
 }
 
-export function DeliverablesPanel({ campaignId, projectId, clientId: fixedClientId, toolbar, presetStatus }: { campaignId?: string; projectId?: string; clientId?: string; toolbar?: ReactNode; presetStatus?: string }) {
+export function DeliverablesPanel({ campaignId, toolbar, presetStatus }: { campaignId?: string; toolbar?: ReactNode; presetStatus?: string }) {
   const { t } = useI18n();
   const { user } = useAuth();
   const staff = user?.role !== 'CLIENT';
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(presetStatus ?? '');
   const [type, setType] = useState('');
-  const [pickedClientId, setClientId] = useState('');
-  const clientId = fixedClientId ?? pickedClientId;
-  const scoped = Boolean(campaignId || projectId || fixedClientId);
+  const [clientId, setClientId] = useState('');
   const [page, setPage] = useState(1);
   const q = useDebounced(search);
-  const list = useApi<Paged<Deliverable>>('/deliverables', { q, status, type, clientId, campaignId, projectId, page, pageSize: 12 });
+  const list = useApi<Paged<Deliverable>>('/deliverables', { q, status, type, clientId, campaignId, page, pageSize: 12 });
   const statusOptions = useEnumOptions('deliverableStatus', DELIVERABLE_STATUSES);
   const typeOptions = useEnumOptions('deliverableType', DELIVERABLE_TYPES);
-  const { clients } = useClientOptions(staff && !scoped);
+  const { clients } = useClientOptions(staff && !campaignId);
   const reset = () => setPage(1);
 
   return (
@@ -58,7 +56,7 @@ export function DeliverablesPanel({ campaignId, projectId, clientId: fixedClient
         <SearchInput value={search} onChange={(v) => { setSearch(v); reset(); }} placeholder={t('deliverable.search')} />
         <FilterSelect value={status} onChange={(v) => { setStatus(v); reset(); }} allLabel={t('common.allStatuses')} options={statusOptions} />
         <FilterSelect value={type} onChange={(v) => { setType(v); reset(); }} allLabel={t('deliverable.allTypes')} options={typeOptions} />
-        {staff && !scoped && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
+        {staff && !campaignId && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
         {toolbar && <div className="col-span-2 sm:ms-auto">{toolbar}</div>}
       </FilterBar>
       {list.isError ? <ErrorState onRetry={() => void list.refetch()} /> : list.isLoading ? (
@@ -67,7 +65,7 @@ export function DeliverablesPanel({ campaignId, projectId, clientId: fixedClient
         <EmptyState icon={Palette} title={t('deliverable.empty')} description={search || status || type || clientId ? t('common.noResultsHint') : staff ? t('deliverable.emptyHint') : t('deliverable.emptyClientHint')} />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{list.data.items.map((d) => <DeliverableCard key={d.id} d={d} showClient={staff && !scoped} />)}</div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{list.data.items.map((d) => <DeliverableCard key={d.id} d={d} showClient={staff && !campaignId} />)}</div>
           <Pagination meta={list.data.meta} onPage={setPage} />
         </>
       )}

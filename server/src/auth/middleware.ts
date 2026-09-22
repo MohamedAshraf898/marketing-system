@@ -31,7 +31,7 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
     locale: u.locale,
     sessionId: session.id,
   };
-  req.scope = await loadScope({ ...req.user, permissions: u.permissions });
+  req.scope = await loadScope(req.user);
   next();
 });
 

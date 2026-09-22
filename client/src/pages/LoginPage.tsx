@@ -8,12 +8,10 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Form';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { LogoMark, Wordmark } from '@/components/layout/Logo';
-import { useBranding } from '@/components/layout/BrandingProvider';
 
 export function LoginPage() {
   const { t } = useI18n();
   const { login } = useAuth();
-  const { agencyName } = useBranding();
   const nav = useNavigate();
   const loc = useLocation();
   const [email, setEmail] = useState('');
@@ -66,7 +64,7 @@ export function LoginPage() {
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-zinc-500">© {new Date().getFullYear()} {agencyName}</p>
+        <p className="relative text-xs text-zinc-500">© {new Date().getFullYear()} OG System</p>
       </div>
 
       {/* form */}

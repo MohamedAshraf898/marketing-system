@@ -3,8 +3,7 @@ import { dispatchToChannels } from '../integrations/registry';
 
 export interface NotificationInput {
   type: string; // NEW_REQUEST | DELIVERABLE_SUBMITTED | DELIVERABLE_APPROVED | CHANGES_REQUESTED | REQUEST_STATUS_CHANGED | REQUEST_ASSIGNED | NEW_COMMENT
-  // phase 2: TASK_ASSIGNED | TASK_DUE_SOON | TASK_OVERDUE | CONTRACT_EXPIRING | INVOICE_OVERDUE | REPORT_AVAILABLE (each needs a 'notif.<TYPE>' text)
-  entity: 'deliverable' | 'request' | 'campaign' | 'task' | 'project' | 'contract' | 'invoice' | 'report' | 'content' | 'client';
+  entity: 'deliverable' | 'request' | 'campaign';
   entityId: string;
   data: Record<string, unknown>;
 }

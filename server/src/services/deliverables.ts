@@ -4,7 +4,6 @@ import { deliverableWhere, fileWhere, type Scope } from '../authz/scope';
 import { Errors } from '../lib/errors';
 import type { Ctx } from '../lib/context';
 import { audit } from './audit';
-import { auditContentSync, syncContentFromDeliverable, type ContentSyncResult } from './contentSync';
 import { clientRecipients, notify, staffRecipients } from './notifications';
 import { and } from './serializers';
 
@@ -15,7 +14,6 @@ export async function findDeliverable(scope: Scope, id: string) {
     include: {
       client: { select: { id: true, companyName: true, name: true } },
       campaign: { select: { id: true, name: true, clientId: true } },
-      project: { select: { id: true, name: true, clientId: true, visibleToClient: true } },
       _count: { select: { files: true } },
     },
   });
@@ -44,7 +42,6 @@ export async function submitDeliverable(ctx: Ctx, id: string) {
     throw Errors.badRequest('DELIVERABLE_EMPTY', 'Add a preview link, a description or a file before submitting.');
   }
   const now = new Date();
-  let synced: ContentSyncResult | null = null;
   await prisma.$transaction(async (tx) => {
     const res = await tx.deliverable.updateMany({
       where: { id, status: 'DRAFT', version: d.version },
@@ -56,11 +53,9 @@ export async function submitDeliverable(ctx: Ctx, id: string) {
     });
     // files of this version become visible to the client together with the submission
     await tx.file.updateMany({ where: { deliverableId: id, version: d.version }, data: { visibleToClient: true } });
-    synced = await syncContentFromDeliverable(id, tx); // linked content item -> CLIENT_APPROVAL (no-op without a link)
   });
-  await auditContentSync(ctx, synced);
 
-  await audit(ctx, 'DELIVERABLE_SUBMITTED', 'deliverable', id, { version: d.version, name: d.name }, { clientId: d.clientId, clientVisible: true });
+  await audit(ctx, 'DELIVERABLE_SUBMITTED', 'deliverable', id, { version: d.version, name: d.name });
   await notify(
     await clientRecipients(d.clientId),
     { type: 'DELIVERABLE_SUBMITTED', entity: 'deliverable', entityId: id, data: { name: d.name, version: d.version } },
@@ -78,8 +73,7 @@ export async function startNewVersion(ctx: Ctx, id: string) {
     data: { status: 'DRAFT', version: d.version + 1 },
   });
   if (res.count !== 1) throw Errors.conflict('INVALID_STATE', 'The deliverable changed. Please refresh.');
-  await auditContentSync(ctx, await syncContentFromDeliverable(id));
-  await audit(ctx, 'DELIVERABLE_NEW_VERSION', 'deliverable', id, { from: d.version, to: d.version + 1, name: d.name }, { clientId: d.clientId });
+  await audit(ctx, 'DELIVERABLE_NEW_VERSION', 'deliverable', id, { from: d.version, to: d.version + 1 });
   return prisma.deliverable.findUniqueOrThrow({ where: { id } });
 }
 
@@ -89,8 +83,7 @@ export async function publishDeliverable(ctx: Ctx, id: string) {
   if (d.status !== 'APPROVED') throw Errors.conflict('INVALID_STATE', 'Only approved deliverables can be published.');
   const res = await prisma.deliverable.updateMany({ where: { id, status: 'APPROVED' }, data: { status: 'PUBLISHED' } });
   if (res.count !== 1) throw Errors.conflict('INVALID_STATE', 'The deliverable changed. Please refresh.');
-  await auditContentSync(ctx, await syncContentFromDeliverable(id));
-  await audit(ctx, 'DELIVERABLE_PUBLISHED', 'deliverable', id, { version: d.version, name: d.name }, { clientId: d.clientId, clientVisible: true });
+  await audit(ctx, 'DELIVERABLE_PUBLISHED', 'deliverable', id, { version: d.version });
   return prisma.deliverable.findUniqueOrThrow({ where: { id } });
 }
 
@@ -106,7 +99,6 @@ export async function decideDeliverable(ctx: Ctx, id: string, decision: 'APPROVE
   const d = await findDeliverable(ctx.scope, id);
   if (d.status !== 'PENDING_APPROVAL') throw Errors.conflict('NOT_PENDING', 'This deliverable is not waiting for approval.');
   const now = new Date();
-  let synced: ContentSyncResult | null = null;
 
   await prisma.$transaction(async (tx) => {
     const res = await tx.deliverable.updateMany({
@@ -129,13 +121,10 @@ export async function decideDeliverable(ctx: Ctx, id: string, decision: 'APPROVE
         decidedAt: now,
       },
     });
-    // linked content item follows the decision inside the same transaction (no-op without a link)
-    synced = await syncContentFromDeliverable(id, tx);
   });
-  await auditContentSync(ctx, synced);
 
   const action = decision === 'APPROVED' ? 'DELIVERABLE_APPROVED' : 'CHANGES_REQUESTED';
-  await audit(ctx, action, 'deliverable', id, { version: d.version, name: d.name }, { clientId: d.clientId, clientVisible: true });
+  await audit(ctx, action, 'deliverable', id, { version: d.version, name: d.name });
   await notify(
     await staffRecipients(d.clientId, d.campaignId),
     { type: action, entity: 'deliverable', entityId: id, data: { name: d.name, version: d.version, client: d.client.companyName } },

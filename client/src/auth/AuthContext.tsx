@@ -12,8 +12,6 @@ interface AuthValue {
   logout: () => Promise<void>;
   updateLocale: (l: 'en' | 'ar') => void;
   refresh: () => Promise<void>;
-  /** true when the signed-in user holds the permission (ADMIN always; CLIENT never). UI hint only - the API enforces it. */
-  can: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -76,11 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => { await qc.invalidateQueries({ queryKey: ME_KEY }); }, [qc]);
 
-  const can = useCallback((permission: string) => !!data && data.user.role !== 'CLIENT' && (data.user.role === 'ADMIN' || data.user.permissions.includes(permission)), [data]);
-
   const value = useMemo<AuthValue>(
-    () => ({ user: data?.user ?? null, config: data?.config ?? null, loading: me.isLoading, login, logout, updateLocale, refresh, can }),
-    [data, me.isLoading, login, logout, updateLocale, refresh, can],
+    () => ({ user: data?.user ?? null, config: data?.config ?? null, loading: me.isLoading, login, logout, updateLocale, refresh }),
+    [data, me.isLoading, login, logout, updateLocale, refresh],
   );
   void locale;
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
