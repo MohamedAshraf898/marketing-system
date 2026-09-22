@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { BarChart3, Trash2 } from 'lucide-react';
-import { api } from '@/api/client';
+import { Link } from 'react-router-dom';
+import { BarChart3, Download, Printer, Scale, Trash2 } from 'lucide-react';
+import { api, qs as queryString } from '@/api/client';
 import { useAction, useApi } from '@/api/hooks';
 import type { ReportRow, ReportsResponse } from '@/api/types';
+import type { ComparePeriodsResponse, CompareScope } from '@/api/types.insights';
 import { useAuth } from '@/auth/AuthContext';
 import { useI18n } from '@/i18n';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -10,32 +12,48 @@ import { DataList } from '@/components/ui/DataList';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/Feedback';
 import { FilterBar, FilterSelect } from '@/components/ui/Filters';
 import { Input } from '@/components/ui/Form';
-import { IconButton } from '@/components/ui/Button';
+import { Button, buttonClass, IconButton } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { MetricTiles } from '@/components/shared/Metrics';
 import { SERIES, SeriesChart } from '@/components/shared/Charts';
 import { useCampaignOptions, useClientOptions } from '@/components/shared/options';
+import { ComparisonCard } from '@/components/insights/ComparisonCard';
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Real report rows only: filters, KPI tiles, four charts and the daily table. */
-export function ReportsPanel({ campaignId: fixedCampaign, toolbar }: { campaignId?: string; toolbar?: ReactNode }) {
-  const { t, fmt } = useI18n();
-  const { user } = useAuth();
+export function ReportsPanel({ campaignId: fixedCampaign, clientId: fixedClient, toolbar }: { campaignId?: string; clientId?: string; toolbar?: ReactNode }) {
+  const { t, fmt, locale } = useI18n();
+  const { user, can } = useAuth();
   const staff = user?.role !== 'CLIENT';
-  const [clientId, setClientId] = useState('');
+  const [clientPick, setClientId] = useState('');
+  const clientId = fixedClient ?? clientPick;
   const [campaignId, setCampaignId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [toDelete, setToDelete] = useState<ReportRow | null>(null);
-  const { clients } = useClientOptions(staff && !fixedCampaign);
+  const [compare, setCompare] = useState(false);
+  const { clients } = useClientOptions(staff && !fixedCampaign && !fixedClient);
   const { campaigns } = useCampaignOptions(clientId || undefined, !fixedCampaign);
   const effectiveCampaign = fixedCampaign ?? (campaignId || undefined);
   const q = useApi<ReportsResponse>('/reports', { campaignId: effectiveCampaign, clientId: clientId || undefined, from, to, page, pageSize: 15 });
   const del = useAction((id: string) => api.del(`/reports/${id}`), { success: t('report.deleted'), onSuccess: () => setToDelete(null) });
   const reset = () => setPage(1);
+
+  const canExport = !staff || can('reports.export'); // CLIENT can always export their own data (server bypasses the permission for them)
+  const canCompare = !!from && !!to;
+  const compareScope: CompareScope = effectiveCampaign ? 'campaign' : clientId ? 'client' : 'all';
+  const compareId = effectiveCampaign || clientId || undefined;
+  const cmp = useApi<ComparePeriodsResponse>(
+    '/analytics/compare',
+    { scope: compareScope, id: compareId, from, to, mode: 'previous_period' },
+    { enabled: compare && canCompare },
+  );
+  const filterParams = { campaignId: effectiveCampaign, clientId: clientId || undefined, from, to };
+  const exportHref = `/api/reports/export.csv${queryString({ ...filterParams, lang: locale })}`;
+  const printHref = `/reports/print${queryString(filterParams)}`;
 
   const preset = (days: number | null) => {
     if (days === null) { setFrom(''); setTo(''); } else {
@@ -51,7 +69,7 @@ export function ReportsPanel({ campaignId: fixedCampaign, toolbar }: { campaignI
   return (
     <div>
       <FilterBar>
-        {staff && !fixedCampaign && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); setCampaignId(''); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
+        {staff && !fixedCampaign && !fixedClient && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); setCampaignId(''); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
         {!fixedCampaign && <FilterSelect value={campaignId} onChange={(v) => { setCampaignId(v); reset(); }} allLabel={t('report.allCampaigns')} options={campaigns.map((c) => ({ value: c.id, label: c.name }))} />}
         <div className="col-span-2 flex items-center gap-2">
           <Input type="date" aria-label={t('report.from')} value={from} max={to || undefined} onChange={(e) => { setFrom(e.target.value); reset(); }} className="sm:w-40" />
@@ -65,6 +83,21 @@ export function ReportsPanel({ campaignId: fixedCampaign, toolbar }: { campaignI
         </div>
         {toolbar && <div className="col-span-2 sm:ms-auto">{toolbar}</div>}
       </FilterBar>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button variant={compare ? 'brand' : 'secondary'} size="sm" icon={<Scale className="size-4" />} disabled={!canCompare} onClick={() => setCompare((c) => !c)}>{t('insights.compare.toggle')}</Button>
+        {!canCompare && <span className="text-xs text-zinc-400">{t('insights.compare.needsRange')}</span>}
+        <div className="ms-auto flex items-center gap-2">
+          {canExport && <a href={exportHref} download className={buttonClass('secondary', 'sm')}><Download className="size-4" />{t('common.export')}</a>}
+          <Link to={printHref} target="_blank" rel="noopener noreferrer" className={buttonClass('secondary', 'sm')}><Printer className="size-4" />{t('insights.print.action')}</Link>
+        </div>
+      </div>
+
+      {compare && canCompare && (
+        <div className="mb-5">
+          {cmp.isError ? <ErrorState onRetry={() => void cmp.refetch()} /> : cmp.isLoading || !cmp.data ? <Skeleton className="h-56 w-full" /> : <ComparisonCard data={cmp.data} />}
+        </div>
+      )}
 
       {q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : q.isLoading ? (
         <div className="space-y-4"><Skeleton className="h-28 w-full" /><div className="grid gap-4 lg:grid-cols-2"><Skeleton className="h-72" /><Skeleton className="h-72" /></div></div>

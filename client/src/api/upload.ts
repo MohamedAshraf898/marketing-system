@@ -2,7 +2,7 @@ import { ALLOWED_UPLOADS } from '@shared/uploads';
 import { api } from './client';
 import type { FileRow } from './types';
 
-export type UploadTarget = { clientId?: string; campaignId?: string; deliverableId?: string; requestId?: string; visibleToClient?: boolean };
+export type UploadTarget = { clientId?: string; campaignId?: string; deliverableId?: string; requestId?: string; projectId?: string; taskId?: string; contentItemId?: string; visibleToClient?: boolean };
 
 export async function uploadFile(file: File, target: UploadTarget): Promise<FileRow> {
   const form = new FormData();

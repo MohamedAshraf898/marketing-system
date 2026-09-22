@@ -10,11 +10,11 @@ import { Checkbox, Field, Select } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
 import { useCampaignOptions, useClientOptions } from '@/components/shared/options';
 
-/** Upload for staff: to a client/campaign, or (when opened from a page) straight to a deliverable / request. */
-export function UploadFileModal({ open, onClose, target, title }: { open: boolean; onClose: () => void; target?: Pick<UploadTarget, 'deliverableId' | 'requestId' | 'campaignId' | 'clientId'>; title?: string }) {
+/** Upload for staff: to a client/campaign, or (when opened from a page) straight to a deliverable / request / project / task / content item. */
+export function UploadFileModal({ open, onClose, target, title }: { open: boolean; onClose: () => void; target?: Pick<UploadTarget, 'deliverableId' | 'requestId' | 'campaignId' | 'clientId' | 'projectId' | 'taskId' | 'contentItemId'>; title?: string }) {
   const { t } = useI18n();
   const { user } = useAuth();
-  const fixed = !!(target?.deliverableId || target?.requestId);
+  const fixed = !!(target?.deliverableId || target?.requestId || target?.projectId || target?.taskId || target?.contentItemId);
   const [file, setFile] = useState<File | null>(null);
   const [clientId, setClientId] = useState(target?.clientId ?? '');
   const [campaignId, setCampaignId] = useState(target?.campaignId ?? '');
@@ -23,7 +23,7 @@ export function UploadFileModal({ open, onClose, target, title }: { open: boolea
   const { campaigns } = useCampaignOptions(clientId || undefined, open && !fixed && (!!clientId || !!target?.campaignId));
 
   const save = useAction(
-    () => uploadFile(file!, fixed ? { deliverableId: target?.deliverableId, requestId: target?.requestId } : { clientId: campaignId ? undefined : clientId, campaignId: campaignId || undefined, visibleToClient: visible }),
+    () => uploadFile(file!, fixed ? { deliverableId: target?.deliverableId, requestId: target?.requestId, projectId: target?.projectId, taskId: target?.taskId, contentItemId: target?.contentItemId } : { clientId: campaignId ? undefined : clientId, campaignId: campaignId || undefined, visibleToClient: visible }),
     { success: t('file.uploaded'), onSuccess: onClose },
   );
   const errs = fieldErrors(save.error);

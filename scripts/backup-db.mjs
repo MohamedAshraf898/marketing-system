@@ -12,6 +12,23 @@ if (!url && fs.existsSync(envFile)) {
   if (m) url = m[1];
 }
 url = url || 'file:./dev.db';
+
+// A remote libSQL database (e.g. Turso) has no local file to VACUUM INTO, and it has its own,
+// better backup story (point-in-time recovery / branching) - point at that instead of guessing.
+if (/^(libsql|https?):\/\//i.test(url)) {
+  console.log('DATABASE_URL points at a remote database (not a local file), so there is nothing here to copy.');
+  console.log('Use your database host\'s own backup/export feature instead - for Turso: `turso db shows <name>`');
+  console.log('and `turso db export`, or point-in-time-recovery / branching from the Turso dashboard/CLI.');
+  const driver = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
+  if (driver === 's3') {
+    console.log('Uploaded files are in your S3-compatible bucket (STORAGE_DRIVER=s3) - back that up via its own tools.');
+  } else {
+    const uploads = process.env.UPLOAD_DIR ? path.resolve(root, process.env.UPLOAD_DIR) : path.join(root, 'uploads');
+    console.log('Uploaded files still live on local disk - copy it too:  ' + uploads);
+  }
+  process.exit(0);
+}
+
 const rel = url.replace(/^file:/, '');
 const dbPath = path.isAbsolute(rel) ? rel : path.resolve(root, 'prisma', rel);
 if (!fs.existsSync(dbPath)) {
@@ -19,7 +36,7 @@ if (!fs.existsSync(dbPath)) {
   process.exit(1);
 }
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const dir = path.join(root, 'backups');
+const dir = process.env.BACKUP_DIR ? path.resolve(process.env.BACKUP_DIR) : path.join(root, 'backups');
 fs.mkdirSync(dir, { recursive: true });
 const target = path.join(dir, `og-system-${stamp}.db`);
 
@@ -29,4 +46,10 @@ const client = createClient({ url: `file:${dbPath}` });
 await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
 client.close();
 console.log(`Database backed up to ${target}`);
-console.log('Uploaded files live in the uploads folder - copy it too:  ' + path.join(root, 'uploads'));
+const driver = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
+if (driver === 's3') {
+  console.log('Uploaded files are in your S3-compatible bucket (STORAGE_DRIVER=s3) - back that up via its own tools.');
+} else {
+  const uploads = process.env.UPLOAD_DIR ? path.resolve(root, process.env.UPLOAD_DIR) : path.join(root, 'uploads');
+  console.log('Uploaded files live in the uploads folder - copy it too:  ' + uploads);
+}

@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { CAMPAIGN_STATUSES, OBJECTIVES, PLATFORMS } from '../../../shared/src/enums';
-import { adminOnly, authenticate, staffOnly } from '../auth/middleware';
-import { campaignWhere, fileWhere, reportWhere, requestWhere, deliverableWhere } from '../authz/scope';
+import { authenticate, staffOnly } from '../auth/middleware';
+import { requirePerm, requirePermOrClient } from '../authz/permissions';
+import { campaignWhere, fileWhere, projectWhere, reportWhere, requestWhere, deliverableWhere } from '../authz/scope';
 import { prisma } from '../db';
 import { ctxOf } from '../lib/context';
 import { Errors } from '../lib/errors';
@@ -23,6 +24,13 @@ const dateStr = z
   .refine(isDateOnly, { message: 'invalid_date' })
   .transform(parseDateOnly);
 
+/** A campaign may only be linked to a project the caller can see AND that belongs to the same client. */
+async function assertProjectLink(scope: Parameters<typeof projectWhere>[0], projectId: string | null | undefined, clientId: string) {
+  if (!projectId) return;
+  const p = await prisma.project.findFirst({ where: and<Prisma.ProjectWhereInput>({ id: projectId }, projectWhere(scope)), select: { clientId: true } });
+  if (!p || p.clientId !== clientId) throw Errors.validation({ projectId: 'invalid_choice' });
+}
+
 const money = z.number().min(0).max(1_000_000_000);
 
 const createSchema = z
@@ -38,6 +46,7 @@ const createSchema = z
     spent: money.default(0),
     description: z.string().trim().max(4000).nullish(),
     campaignExternalId: z.string().trim().max(120).nullish(),
+    projectId: z.string().min(1).nullish(),
   })
   .superRefine((v, c) => {
     if (v.startDate && v.endDate && v.endDate < v.startDate) c.addIssue({ code: 'custom', path: ['endDate'], message: 'end_before_start' });
@@ -56,6 +65,7 @@ const updateSchema = z
     spent: money,
     description: z.string().trim().max(4000).nullable(),
     campaignExternalId: z.string().trim().max(120).nullable(),
+    projectId: z.string().min(1).nullable(),
   })
   .partial()
   .strict();
@@ -65,6 +75,7 @@ const teamUpdateSchema = z.object({ status: z.enum(CAMPAIGN_STATUSES) }).strict(
 
 campaignsRouter.get(
   '/',
+  requirePermOrClient('campaigns.view'),
   asyncHandler(async (req, res) => {
     const { scope } = ctxOf(req);
     const p = paging(req.query, 20);
@@ -97,22 +108,25 @@ campaignsRouter.get(
 
 campaignsRouter.post(
   '/',
-  adminOnly,
+  requirePerm('campaigns.create'),
   asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const body = parse(createSchema, req.body);
     const client = await prisma.client.findUnique({ where: { id: body.clientId }, select: { id: true, status: true } });
     if (!client) throw Errors.validation({ clientId: 'invalid_choice' });
+    if (ctx.user.role === 'TEAM' && !ctx.scope.fullClientIds.includes(body.clientId)) throw Errors.validation({ clientId: 'invalid_choice' });
+    await assertProjectLink(ctx.scope, body.projectId, body.clientId);
     const campaign = await prisma.campaign.create({
-      data: { ...body, description: body.description || null, campaignExternalId: body.campaignExternalId || null },
+      data: { ...body, projectId: body.projectId ?? null, description: body.description || null, campaignExternalId: body.campaignExternalId || null },
     });
-    await audit(ctx, 'CAMPAIGN_CREATED', 'campaign', campaign.id, { name: campaign.name, clientId: campaign.clientId });
+    await audit(ctx, 'CAMPAIGN_CREATED', 'campaign', campaign.id, { name: campaign.name, clientId: campaign.clientId }, { clientId: campaign.clientId, clientVisible: true });
     res.status(201).json({ item: campaign });
   }),
 );
 
 campaignsRouter.get(
   '/:id',
+  requirePermOrClient('campaigns.view'),
   asyncHandler(async (req, res) => {
     const { scope } = ctxOf(req);
     const campaign = await findCampaign(scope, idParam(req));
@@ -136,7 +150,9 @@ campaignsRouter.patch(
   asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const existing = await findCampaign(ctx.scope, idParam(req));
-    const body = ctx.user.role === 'ADMIN' ? parse(updateSchema, req.body) : parse(teamUpdateSchema, req.body);
+    // full edit needs campaigns.edit (admins always); everybody else on staff may only move the status, as before
+    const fullEdit = ctx.scope.permissions.has('campaigns.edit');
+    const body = fullEdit ? parse(updateSchema, req.body) : parse(teamUpdateSchema, req.body);
 
     if ('clientId' in body && body.clientId && body.clientId !== existing.clientId) {
       const target = await prisma.client.findUnique({ where: { id: body.clientId }, select: { id: true } });
@@ -150,17 +166,18 @@ campaignsRouter.patch(
 
     const { clientId: _ignored, ...data } = body as typeof body & { clientId?: string };
     void _ignored;
+    if ('projectId' in data && data.projectId !== undefined) await assertProjectLink(ctx.scope, data.projectId, existing.clientId);
     const updated = await prisma.campaign.update({ where: { id: existing.id }, data });
     const changes: Record<string, unknown> = {};
     if (data.status && data.status !== existing.status) changes.status = { from: existing.status, to: data.status };
-    await audit(ctx, 'CAMPAIGN_UPDATED', 'campaign', existing.id, { fields: Object.keys(data), ...changes });
+    await audit(ctx, 'CAMPAIGN_UPDATED', 'campaign', existing.id, { fields: Object.keys(data), name: existing.name, ...changes }, { clientId: existing.clientId });
     res.json({ item: updated });
   }),
 );
 
 campaignsRouter.delete(
   '/:id',
-  adminOnly,
+  requirePerm('campaigns.delete'),
   asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const existing = await findCampaign(ctx.scope, idParam(req));
@@ -175,12 +192,14 @@ campaignsRouter.delete(
       prisma.campaignAssignment.deleteMany({ where: { campaignId: id } }),
       prisma.deliverable.updateMany({ where: { campaignId: id }, data: { campaignId: null } }),
       prisma.request.updateMany({ where: { campaignId: id }, data: { campaignId: null } }),
+      prisma.task.updateMany({ where: { campaignId: id }, data: { campaignId: null } }),
+      prisma.contentItem.updateMany({ where: { campaignId: id }, data: { campaignId: null } }),
       prisma.file.deleteMany({ where: { id: { in: files.map((f) => f.id) } } }),
       prisma.file.updateMany({ where: { campaignId: id }, data: { campaignId: null } }),
       prisma.campaign.delete({ where: { id } }),
     ]);
     await Promise.all(files.map((f) => storage.delete(f.filePath).catch(() => undefined)));
-    await audit(ctx, 'CAMPAIGN_DELETED', 'campaign', id, { name: existing.name, keptApprovalRecords: approvalCount });
+    await audit(ctx, 'CAMPAIGN_DELETED', 'campaign', id, { name: existing.name, keptApprovalRecords: approvalCount }, { clientId: existing.clientId });
     res.json({ ok: true });
   }),
 );

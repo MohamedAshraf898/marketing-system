@@ -40,8 +40,21 @@ export const config = {
   maxUploadBytes: Math.round(Number(env.MAX_UPLOAD_MB ?? 25) * 1024 * 1024),
   currency: env.APP_CURRENCY ?? 'USD',
   databaseUrl: env.DATABASE_URL ?? 'file:./dev.db',
+  // Auth token for a remote libSQL database (e.g. Turso). Unused for local file databases.
+  databaseAuthToken: env.DATABASE_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN ?? undefined,
   webDist: path.join(ROOT, 'client', 'dist'),
   cookieName: 'og_session',
+  // File storage driver: 'local' (default, disk under uploadDir) or 's3' (S3-compatible object
+  // storage such as Cloudflare R2, AWS S3, MinIO, Backblaze B2). See server/src/storage/index.ts.
+  storageDriver: (env.STORAGE_DRIVER ?? 'local').trim().toLowerCase(),
+  s3: {
+    bucket: env.S3_BUCKET ?? '',
+    endpoint: env.S3_ENDPOINT ?? '',
+    region: env.S3_REGION ?? 'auto',
+    accessKeyId: env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? '',
+    forcePathStyle: env.S3_FORCE_PATH_STYLE === 'true',
+  },
 } as const;
 
 /**
@@ -52,4 +65,13 @@ export function resolveDbFile(url: string): string {
   const raw = url.replace(/^file:/, '');
   if (raw === ':memory:') return raw;
   return path.isAbsolute(raw) ? raw : path.resolve(ROOT, 'prisma', raw);
+}
+
+/**
+ * True for a remote libSQL database (Turso and compatible hosts use `libsql://` or `https://`).
+ * False for a local SQLite file (`file:...`, the default), which is the only shape the test
+ * suite and local dev ever use.
+ */
+export function isRemoteDbUrl(url: string): boolean {
+  return /^(libsql|https?):\/\//i.test(url);
 }

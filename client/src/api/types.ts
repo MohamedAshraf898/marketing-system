@@ -1,4 +1,5 @@
 import type {
+  ClientType, OnboardingStatus,
   ApprovalDecision, CampaignStatus, ClientStatus, DeliverableStatus, DeliverableType, Objective, Platform,
   RequestPriority, RequestStatus, RequestType, Role, UserStatus,
 } from '@shared/enums';
@@ -8,6 +9,9 @@ export interface Paged<T> { items: T[]; meta: Meta }
 
 export interface Me {
   id: string; name: string; email: string; role: Role; clientId: string | null; avatar: string | null; locale: 'en' | 'ar';
+  jobTitle?: string | null;
+  /** effective permissions (ADMIN: all, TEAM: role defaults or the saved list, CLIENT: none). The API enforces them; the UI only hides buttons. */
+  permissions: string[];
   client: { id: string; name: string; companyName: string; status: ClientStatus; hasLogo: boolean } | null;
 }
 export interface AppConfig { currency: string; maxUploadMb: number }
@@ -16,6 +20,13 @@ export interface MeResponse { user: Me; config: AppConfig }
 export interface ClientLite { id: string; companyName: string }
 export interface Client {
   id: string; name: string; companyName: string; email: string; phone: string | null; status: ClientStatus; hasLogo: boolean; createdAt: string;
+  // CRM (phase 2). Fields marked "staff" are NOT sent to CLIENT users.
+  industry?: string | null; website?: string | null; address?: string | null; country?: string | null; city?: string | null;
+  notes?: string | null; // client-visible
+  leadSource?: string | null; accountManagerId?: string | null; clientType?: ClientType; tags?: string[]; // staff
+  onboardingStatus?: OnboardingStatus; clientSince?: string | null; contractStart?: string | null; contractEnd?: string | null; // staff
+  monthlyRetainer?: number | null; internalNotes?: string | null; // staff
+  accountManager?: { id: string; name: string } | null; // staff
   _count?: { campaigns: number; users?: number; requests?: number; deliverables?: number; files?: number };
   users?: Array<{ id: string; name: string; email: string; status: UserStatus; lastLoginAt: string | null }>;
   team?: Array<{ id: string; name: string; email: string }>;
@@ -70,6 +81,7 @@ export interface ReportsResponse { summary: Metrics; series: SeriesPoint[]; item
 
 export interface FileRow {
   id: string; fileName: string; fileType: string; size: number; clientId: string; campaignId: string | null; deliverableId: string | null; requestId: string | null;
+  projectId?: string | null; contentItemId?: string | null; taskId?: string | null; onboardingItemId?: string | null; contractId?: string | null; invoiceId?: string | null;
   version: number; visibleToClient: boolean; createdAt: string; uploadedBy: { id: string; name: string; role: Role };
   campaign: { id: string; name: string } | null; deliverable: { id: string; name: string } | null; request: { id: string; title: string } | null;
 }

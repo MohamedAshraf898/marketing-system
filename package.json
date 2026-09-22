@@ -21,16 +21,17 @@
     "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:deploy:remote": "npm run migrate -w server",
     "db:studio": "prisma studio",
     "db:backup": "node scripts/backup-db.mjs",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate || echo 'Skipping prisma generate for now (schema not copied into the build yet) - it runs explicitly later in the Docker build.'"
   },
   "dependencies": {
     "@prisma/adapter-libsql": "~6.19.3",
-    "@prisma/client": "~6.19.3"
+    "@prisma/client": "~6.19.3",
+    "prisma": "~6.19.3"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0",
-    "prisma": "~6.19.3"
+    "concurrently": "^9.1.0"
   }
 }

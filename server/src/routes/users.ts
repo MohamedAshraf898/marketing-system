@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { LOCALES, ROLES, USER_STATUSES } from '../../../shared/src/enums';
+import { isPermission, type Permission } from '../../../shared/src/permissions';
+import { effectivePermissions, parsePermissions, sanitizePermissionList } from '../authz/permissions';
 import { hashPassword, passwordProblem } from '../auth/password';
 import { adminOnly, authenticate, staffOnly } from '../auth/middleware';
 import { deleteUserSessions } from '../auth/sessions';
@@ -17,9 +19,18 @@ export const teamMembersRouter = Router();
 
 const userSelect = {
   id: true, name: true, email: true, role: true, clientId: true, avatar: true, locale: true, status: true,
-  lastLoginAt: true, createdAt: true, updatedAt: true,
+  lastLoginAt: true, createdAt: true, updatedAt: true, permissions: true,
   client: { select: { id: true, companyName: true } },
 } satisfies Prisma.UserSelect;
+
+/**
+ * Replaces the raw stored JSON with what an administrator needs to see: the effective permission list and whether it was
+ * customised (false = role defaults). Only ever used inside the ADMIN-only router.
+ */
+function withPermissions<T extends { role: 'ADMIN' | 'TEAM' | 'CLIENT'; permissions: string | null }>(u: T) {
+  const { permissions, ...rest } = u;
+  return { ...rest, permissions: [...effectivePermissions({ role: u.role, permissions })], permissionsCustom: u.role === 'TEAM' && parsePermissions(permissions) !== null };
+}
 
 const passwordField = z.string().superRefine((v, c) => {
   const p = passwordProblem(v);
@@ -97,7 +108,7 @@ usersRouter.get(
       prisma.user.count({ where }),
       prisma.user.findMany({ where, orderBy: [{ role: 'asc' }, { name: 'asc' }], skip: p.skip, take: p.take, select: userSelect }),
     ]);
-    res.json({ items, meta: pageMeta(p, total) });
+    res.json({ items: items.map(withPermissions), meta: pageMeta(p, total) });
   }),
 );
 
@@ -125,7 +136,7 @@ usersRouter.post(
       await setAssignments(user.id, body.clientIds ?? [], body.campaignIds ?? []);
     }
     await audit(ctx, 'USER_CREATED', 'user', user.id, { role: user.role, email: user.email });
-    res.status(201).json({ item: user });
+    res.status(201).json({ item: withPermissions(user) });
   }),
 );
 
@@ -143,7 +154,7 @@ usersRouter.get(
       }),
     ]);
     res.json({
-      item: { ...user, clients: clientAssignments.map((a) => a.client), campaigns: campaignAssignments.map((a) => a.campaign) },
+      item: { ...withPermissions(user), clients: clientAssignments.map((a) => a.client), campaigns: campaignAssignments.map((a) => a.campaign) },
     });
   }),
 );
@@ -175,6 +186,7 @@ usersRouter.patch(
       data: {
         ...rest,
         clientId: role === 'CLIENT' ? clientId : null,
+        ...(role !== 'TEAM' ? { permissions: null } : {}), // a custom permission list only means something for TEAM users
         ...(password ? { passwordHash: await hashPassword(password) } : {}),
       },
       select: userSelect,
@@ -186,7 +198,7 @@ usersRouter.patch(
     if (password || body.status === 'INACTIVE' || (body.role && body.role !== existing.role)) await deleteUserSessions(id);
 
     await audit(ctx, 'USER_UPDATED', 'user', id, { changes: Object.keys(body).map((k) => (k === 'password' ? 'passwordReset' : k)) });
-    res.json({ item: user });
+    res.json({ item: withPermissions(user) });
   }),
 );
 
@@ -202,6 +214,32 @@ usersRouter.put(
     await setAssignments(id, body.clientIds, body.campaignIds);
     await audit(ctx, 'USER_ASSIGNMENTS_UPDATED', 'user', id, { clients: body.clientIds.length, campaigns: body.campaignIds.length });
     res.json({ ok: true });
+  }),
+);
+
+// PUT /users/:id/permissions  { permissions: string[] | null }   null = back to the role defaults
+usersRouter.put(
+  '/:id/permissions',
+  asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const id = idParam(req);
+    const body = parse(z.object({ permissions: z.array(z.string().max(60)).max(200).nullable() }).strict(), req.body);
+    const user = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, permissions: true } });
+    if (!user) throw Errors.notFound();
+    // ADMIN always has everything, CLIENT never has anything: only TEAM members carry a customisable list
+    if (user.role !== 'TEAM') throw Errors.badRequest('PERMISSIONS_TEAM_ONLY', 'Only team members can have custom permissions.');
+    if (body.permissions && !body.permissions.every(isPermission)) throw Errors.validation({ permissions: 'invalid_choice' });
+
+    const list: Permission[] | null = body.permissions ? sanitizePermissionList(body.permissions) : null; // dedupes + strips admin-only keys
+    const before = effectivePermissions(user);
+    const after = effectivePermissions({ role: 'TEAM', permissions: list ? JSON.stringify(list) : null });
+    await prisma.user.update({ where: { id }, data: { permissions: list ? JSON.stringify(list) : null } });
+
+    const added = [...after].filter((p) => !before.has(p));
+    const removed = [...before].filter((p) => !after.has(p));
+    await audit(ctx, 'USER_PERMISSIONS_CHANGED', 'user', id, { added, removed, reset: list === null });
+    const fresh = await prisma.user.findUniqueOrThrow({ where: { id }, select: userSelect });
+    res.json({ item: withPermissions(fresh) });
   }),
 );
 

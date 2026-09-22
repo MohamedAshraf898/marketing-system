@@ -1,6 +1,24 @@
 // English dictionary. Keys are flat "group.key" strings; {name} style placeholders are filled by t().
 // Add a key here first, then add its Arabic translation in ar.ts (TypeScript enforces both files stay in sync).
+import { coreEn } from './p2/core.en';
+import { crmEn } from './p2/crm.en';
+import { workEn } from './p2/work.en';
+import { timeEn } from './p2/time.en';
+import { contentEn } from './p2/content.en';
+import { financeEn } from './p2/finance.en';
+import { insightsEn } from './p2/insights.en';
+import { adminEn } from './p2/admin.en';
 export const en = {
+  // ── phase 2 feature groups (see i18n/p2/*.en.ts) ──
+  ...coreEn,
+  ...crmEn,
+  ...workEn,
+  ...timeEn,
+  ...contentEn,
+  ...financeEn,
+  ...insightsEn,
+  ...adminEn,
+
   'app.name': 'OG System',
 
   // ── navigation / shell ──

@@ -13,8 +13,24 @@ const ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
   NEW_COMMENT: { icon: MessageSquare, tone: 'bg-zinc-100 text-zinc-700' },
 };
 
-export const notificationLink = (n: Pick<NotificationRow, 'entity' | 'entityId'>): string | null =>
-  n.entity === 'deliverable' && n.entityId ? `/deliverables/${n.entityId}` : n.entity === 'request' && n.entityId ? `/requests/${n.entityId}` : null;
+/** Where a notification leads. `?open=<id>` opens the item's details panel on list pages. */
+export const notificationLink = (n: Pick<NotificationRow, 'entity' | 'entityId'>): string | null => {
+  const id = n.entityId;
+  if (!id) return n.entity === 'report' ? '/reports' : null;
+  switch (n.entity) {
+    case 'deliverable': return `/deliverables/${id}`;
+    case 'request': return `/requests/${id}`;
+    case 'campaign': return `/campaigns/${id}`;
+    case 'project': return `/projects/${id}`;
+    case 'client': return `/clients/${id}`;
+    case 'task': return `/tasks?open=${id}`;
+    case 'content': return `/content?open=${id}`;
+    case 'contract': return `/contracts?open=${id}`;
+    case 'invoice': return `/invoices?open=${id}`;
+    case 'report': return '/reports';
+    default: return null;
+  }
+};
 
 export function useNotificationText() {
   const { t, label, has } = useI18n();

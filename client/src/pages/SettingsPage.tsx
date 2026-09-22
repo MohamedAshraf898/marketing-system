@@ -12,6 +12,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { cx } from '@/components/ui/cx';
 import { Field, Input } from '@/components/ui/Form';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { BrandingCard } from './settings/BrandingCard';
 
 function ProfileCard() {
   const { t } = useI18n();
@@ -90,10 +91,11 @@ function PasswordCard() {
 
 export function SettingsPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
-      <div className="space-y-5"><ProfileCard /><LanguageCard /><PasswordCard /></div>
+      <div className="space-y-5"><ProfileCard /><LanguageCard />{user?.role === 'ADMIN' && <BrandingCard />}<PasswordCard /></div>
     </div>
   );
 }

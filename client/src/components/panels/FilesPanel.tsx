@@ -16,7 +16,7 @@ import { FileTypeIcon } from '@/components/shared/Media';
 import { useClientOptions } from '@/components/shared/options';
 import { Link } from 'react-router-dom';
 
-export function FilesPanel({ campaignId, toolbar }: { campaignId?: string; toolbar?: ReactNode }) {
+export function FilesPanel({ campaignId, clientId: fixedClientId, toolbar }: { campaignId?: string; clientId?: string; toolbar?: ReactNode }) {
   const { t, fmt } = useI18n();
   const { user } = useAuth();
   const staff = user?.role !== 'CLIENT';
@@ -26,8 +26,8 @@ export function FilesPanel({ campaignId, toolbar }: { campaignId?: string; toolb
   const [page, setPage] = useState(1);
   const [toDelete, setToDelete] = useState<FileRow | null>(null);
   const q = useDebounced(search);
-  const list = useApi<Paged<FileRow>>('/files', { q, kind, clientId, campaignId, page });
-  const { clients } = useClientOptions(staff && !campaignId);
+  const list = useApi<Paged<FileRow>>('/files', { q, kind, clientId: fixedClientId ?? clientId, campaignId, page });
+  const { clients } = useClientOptions(staff && !campaignId && !fixedClientId);
   const del = useAction((id: string) => api.del(`/files/${id}`), { success: t('file.deleted'), onSuccess: () => setToDelete(null) });
   const reset = () => setPage(1);
 
@@ -38,7 +38,7 @@ export function FilesPanel({ campaignId, toolbar }: { campaignId?: string; toolb
       <FilterBar>
         <SearchInput value={search} onChange={(v) => { setSearch(v); reset(); }} placeholder={t('file.search')} />
         <FilterSelect value={kind} onChange={(v) => { setKind(v); reset(); }} allLabel={t('file.allTypes')} options={[{ value: 'image', label: t('file.kindImage') }, { value: 'video', label: t('file.kindVideo') }, { value: 'document', label: t('file.kindDocument') }]} />
-        {staff && !campaignId && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
+        {staff && !campaignId && !fixedClientId && <FilterSelect value={clientId} onChange={(v) => { setClientId(v); reset(); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />}
         {toolbar && <div className="col-span-2 sm:ms-auto">{toolbar}</div>}
       </FilterBar>
       {list.isError ? <ErrorState onRetry={() => void list.refetch()} /> : list.isLoading ? <SkeletonRows /> : !list.data?.items.length ? (
