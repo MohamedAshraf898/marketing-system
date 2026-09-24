@@ -1,4 +1,4 @@
-# OG System
+# Famolya
 
 A complete **Agency Management & Client Operations Platform** for a digital marketing agency: CRM, projects, tasks, a content calendar with visual creative proofing, client onboarding, contracts, invoices, time tracking, team workload, reporting/analytics and a client portal — all in one self-hosted app. Your team runs the whole client lifecycle (lead → onboarding → projects/campaigns → content → approval → reporting → invoicing); your clients log in to a private portal to review work, **approve or request changes**, send requests, and see their own performance numbers, files, contracts and invoices.
 
@@ -136,6 +136,41 @@ Everything below sits on top of the same authorization model as the approval wor
 - **Notification center.** Unread count, mark-as-read/mark-all-read, and history, covering every event above (task assigned/due, contract expiring, invoice overdue, content sent for approval, report available, …) in addition to the original approval/request/comment notifications.
 
 ---
+
+### Attendance & leave (`/attendance`)
+
+- **Team members** check in / out and start / end breaks with one tap (also on phones). Every time is taken from the
+  server clock - nothing time-related is accepted from the browser. They see their own history, monthly calendar and totals,
+  and request leave.
+- **Work schedules** (Attendance > Settings, `attendance.manage`): working days, start / end time, break, grace period and
+  the minimum for a full day, in the schedule's own time zone. Late, early leave, overtime and half days are calculated from
+  the person's schedule (nothing is hard-coded to 9-5). One schedule is the default; holidays are managed there too.
+- **Team board** (`attendance.view_all`): who is working / on break / checked out / late / absent / on leave / WFH, with
+  Today, Yesterday, This week, This month and custom ranges, filters and CSV export.
+- **Corrections** (`attendance.manage`): fix a forgotten check-out or add a missing day. A reason is required; the change is
+  flagged as manual, written to the audit log with old and new values, and the employee is notified. Nobody except an
+  administrator can correct their own record.
+- **Leave**: approving a request (`leave.approve`) marks the working days ON_LEAVE; cancelling it undoes that. The nightly
+  job turns past working days without a check-in into ABSENT (or HOLIDAY / ON_LEAVE).
+- Who appears on the board is set per person (Attendance > Settings > "Tracked"); team members are tracked by default,
+  administrators are not.
+
+### Task workspace (`/tasks`, `/my-tasks`, `/team-tasks`)
+
+- Hierarchy: the agency > **Spaces** > **Folders** > **Lists** > Tasks > Subtasks (up to 3 levels). A space can belong to
+  one client (only staff of that client see it); a folder or list can be linked to a project, and new tasks there join
+  that project automatically.
+- Tasks have multiple assignees, a reviewer, start / due dates, estimate vs tracked time, tags, custom fields,
+  checklists, attachments, comments with @mentions, dependencies (blocked by / blocking / related, with an optional hard
+  block), recurrence and an activity timeline.
+- Views: List (sorting, column picker, bulk actions), Board (drag & drop between statuses and within a column, custom
+  statuses per space), Calendar (day / week / month, by start or due date) and Timeline (Gantt with dependency arrows).
+- **Templates**, **automation rules** ("when a task moves to Review, notify the reviewer", "when completed, create the
+  next task", "when overdue, raise the priority" ...) and **custom fields / tags** live under Tasks > Task settings.
+- **Client visibility**: every task is Internal by default. Only tasks set to "Client visible" appear in the client
+  portal, through a separate API that returns a stripped-down version (no estimates, hours, internal comments or files).
+- **Team Overview** (`/team-overview`) and **Team reports** (`/team-reports`, CSV) give managers attendance, workload,
+  overdue work per person, task completion and estimated vs tracked time.
 
 ## 5. Who can do what
 

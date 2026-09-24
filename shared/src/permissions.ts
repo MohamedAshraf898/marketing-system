@@ -9,7 +9,7 @@
 export const PERMISSION_GROUPS = [
   { id: 'clients', permissions: ['clients.view', 'clients.create', 'clients.edit', 'clients.delete', 'contacts.manage', 'notes.internal', 'onboarding.manage'] },
   { id: 'projects', permissions: ['projects.view', 'projects.create', 'projects.edit', 'projects.delete'] },
-  { id: 'tasks', permissions: ['tasks.view', 'tasks.create', 'tasks.assign', 'tasks.edit_all', 'tasks.delete'] },
+  { id: 'tasks', permissions: ['tasks.view', 'tasks.create', 'tasks.assign', 'tasks.edit_all', 'tasks.delete', 'tasks.view_team', 'tasks.manage_spaces', 'tasks.templates', 'tasks.automations'] },
   { id: 'campaigns', permissions: ['campaigns.view', 'campaigns.create', 'campaigns.edit', 'campaigns.delete'] },
   { id: 'content', permissions: ['content.view', 'content.manage'] },
   { id: 'deliverables', permissions: ['deliverables.create', 'deliverables.approve'] },
@@ -17,6 +17,7 @@ export const PERMISSION_GROUPS = [
   { id: 'finance', permissions: ['invoices.view', 'invoices.manage', 'contracts.view', 'contracts.manage'] },
   { id: 'files', permissions: ['files.upload', 'files.delete'] },
   { id: 'time', permissions: ['time.track', 'time.view_all', 'workload.view'] },
+  { id: 'attendance', permissions: ['attendance.track', 'attendance.view_all', 'attendance.manage', 'leave.approve'] },
   { id: 'system', permissions: ['audit_logs.view'] },
 ] as const;
 
@@ -27,7 +28,8 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_GROUPS.flatMap((g) => [.
 /**
  * What a TEAM member can do out of the box. This equals what team members could do before phase 2
  * (view assigned clients / campaigns, create deliverables, upload files, add reports ...) plus everyday work tools.
- * Money (invoices, contracts), people-cost data (time.view_all, workload) and destructive actions are opt-in.
+ * Money (invoices, contracts), people-cost data (time.view_all, workload), team-lead tools (team tasks, spaces, templates,
+ * automations, attendance oversight, leave approval) and destructive actions are opt-in.
  */
 export const DEFAULT_TEAM_PERMISSIONS: Permission[] = [
   'clients.view', 'contacts.manage', 'notes.internal', 'onboarding.manage',
@@ -39,6 +41,7 @@ export const DEFAULT_TEAM_PERMISSIONS: Permission[] = [
   'reports.view', 'reports.create', 'reports.export',
   'files.upload', 'files.delete',
   'time.track',
+  'attendance.track',
 ];
 
 /**

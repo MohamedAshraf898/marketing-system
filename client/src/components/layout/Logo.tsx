@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { cx } from '@/components/ui/cx';
 import { useBranding } from './BrandingProvider';
 
-/** The agency logo when one was uploaded (Settings > Branding), otherwise the built-in OG mark. */
+/** The agency logo when one was uploaded (Settings > Branding), otherwise the built-in Famolya mark. */
 export function LogoMark({ className }: { className?: string }) {
   const { logoUrl } = useBranding();
   const [failed, setFailed] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function Wordmark({ dark }: { dark?: boolean }) {
   }
   return (
     <span className={cx('whitespace-nowrap text-[17px] font-semibold tracking-tight', dark ? 'text-white' : 'text-zinc-900')}>
-      OG <span className={dark ? 'text-brand-400' : 'text-brand-600'}>System</span>
+      Famolya
     </span>
   );
 }

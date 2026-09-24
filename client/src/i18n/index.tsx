@@ -54,7 +54,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = locale;
     document.documentElement.dir = dir;
-    document.title = dicts[locale]['app.name'] ?? 'OG System';
+    document.title = dicts[locale]['app.name'] ?? 'Famolya';
   }, [locale, dir]);
 
   const setLocale = useCallback((l: Locale) => {

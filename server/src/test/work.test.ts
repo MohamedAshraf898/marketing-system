@@ -92,7 +92,7 @@ describe('projects: create / scope / client DTO', () => {
       const raw = JSON.stringify(body);
       expect(raw).not.toContain('SECRET-TASK-TITLE');
       expect(raw).not.toContain('SECRET-NOTE');
-      expect(raw).not.toContain('5000');
+      expect(raw).not.toMatch(/(?<![\w-])5000(?![\w-])/); // the budget as a JSON number (ids may contain "5000" by chance)
     }
     const row = detail.body.item;
     for (const k of ['budget', 'projectManager', 'projectManagerId', 'createdById', 'visibleToClient', 'taskCounts', 'taskCountsByStatus', 'tasks', 'permissions', 'internalNotes']) {

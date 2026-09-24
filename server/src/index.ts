@@ -10,7 +10,7 @@ async function main() {
   await tuneSqlite();
   const app = createApp();
   app.listen(config.port, () => {
-    console.log(`OG System API listening on http://localhost:${config.port}  (${config.env})`);
+    console.log(`Famolya API listening on http://localhost:${config.port}  (${config.env})`);
     if (!config.isProd) console.log(`Web app (dev): ${config.clientOrigins[0]}`);
     startMaintenance(); // contract expiry, overdue invoices, task reminders
   });

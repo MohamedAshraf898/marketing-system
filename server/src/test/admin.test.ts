@@ -185,7 +185,7 @@ describe('branding', () => {
   it('GET / is public and returns only the safe fields', async () => {
     const res = await request(app).get('/api/branding');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ agencyName: 'OG System', primaryColor: '#4f46e5', secondaryColor: '#0f172a', hasLogo: false, hasFavicon: false });
+    expect(res.body).toMatchObject({ agencyName: 'Famolya', primaryColor: '#4f46e5', secondaryColor: '#0f172a', hasLogo: false, hasFavicon: false });
     expect(Object.keys(res.body).sort()).toEqual(['agencyName', 'contrastOk', 'hasFavicon', 'hasLogo', 'primaryColor', 'secondaryColor', 'updatedAt']);
     expect((await request(app).get('/api/branding/logo')).status).toBe(404);
     expect((await request(app).get('/api/branding/favicon')).status).toBe(404);
@@ -199,7 +199,7 @@ describe('branding', () => {
       expect((await logoRes(a, 'f.png', tinyPng(), '/api/branding/favicon')).status).toBe(403);
       expect((await a.delete('/api/branding/logo')).status).toBe(403);
     }
-    expect((await request(app).get('/api/branding')).body.agencyName).toBe('OG System');
+    expect((await request(app).get('/api/branding')).body.agencyName).toBe('Famolya');
   });
 
   it('PUT validates name and colours strictly', async () => {
@@ -224,7 +224,7 @@ describe('branding', () => {
     const rows = await prisma.auditLog.findMany({ where: { action: 'BRANDING_UPDATED', entity: 'settings' } });
     expect(rows.length).toBeGreaterThanOrEqual(2);
     expect(rows[0].userId).toBe(w.admin.id);
-    await admin.put('/api/branding').send({ agencyName: 'OG System', primaryColor: '#4f46e5', secondaryColor: '#0f172a' });
+    await admin.put('/api/branding').send({ agencyName: 'Famolya', primaryColor: '#4f46e5', secondaryColor: '#0f172a' });
   });
 
   it('rejects SVG, HTML, oversized files, wrong magic bytes and wrong extensions', async () => {

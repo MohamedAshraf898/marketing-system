@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, CalendarClock, ClipboardList, FolderKanban, Gauge, Info, Timer } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, FolderKanban, Gauge, Info, Timer } from 'lucide-react';
 import { useApi } from '@/api/hooks';
 import type { LoadIndicator, WorkloadResponse, WorkloadRow, WorkloadTasksResponse } from '@/api/types.time';
 import { useI18n } from '@/i18n';
@@ -12,15 +12,18 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { ProgressBar } from '@/components/ui/Progress';
 import { Segmented } from '@/components/ui/Tabs';
 import { cx } from '@/components/ui/cx';
+import { FilterBar, FilterSelect } from '@/components/ui/Filters';
+import { useClientOptions, useProjectOptions } from '@/components/shared/options';
 import { addDays, localDateStr, tzOffsetMin, useTimeFormat } from '@/components/shared/timer';
 
-type Preset = 'thisWeek' | 'nextWeek' | 'thisMonth';
+type Preset = 'today' | 'thisWeek' | 'nextWeek' | 'thisMonth';
 
 /** Monday-based weeks and calendar months, in the user's own zone. */
 function rangeOf(p: Preset): { from: string; to: string } {
   const now = new Date();
   const today = localDateStr(now);
   const monday = addDays(today, -((now.getDay() + 6) % 7));
+  if (p === 'today') return { from: today, to: today };
   if (p === 'thisWeek') return { from: monday, to: addDays(monday, 6) };
   if (p === 'nextWeek') return { from: addDays(monday, 7), to: addDays(monday, 13) };
   return { from: localDateStr(new Date(now.getFullYear(), now.getMonth(), 1)), to: localDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
@@ -73,6 +76,8 @@ function MemberCard({ row, onOpen }: { row: WorkloadRow; onOpen: () => void }) {
             <Stat icon={CalendarClock} label={t('workload.dueInRange')} value={row.dueInWindow} />
             <Stat icon={Timer} label={t('workload.logged')} value={`${fmt.number(row.loggedHours)} ${t('time.hoursShort')}`} />
             <Stat icon={FolderKanban} label={t('workload.projects')} value={row.activeProjects} />
+            <Stat icon={CalendarClock} label={t('workload.dueToday')} value={row.dueToday ?? 0} />
+            <Stat icon={CheckCircle2} label={t('workload.completed')} value={row.completedTasks ?? 0} />
           </div>
           {(row.unestimatedTasks > 0 || row.loggedPartial) && (
             <p className="text-xs text-zinc-500">
@@ -119,7 +124,13 @@ export function WorkloadPage() {
   const [preset, setPreset] = useState<Preset>('thisWeek');
   const [open, setOpen] = useState<WorkloadRow | null>(null);
   const range = rangeOf(preset);
-  const q = useApi<WorkloadResponse>('/workload', { ...range, tz: tzOffsetMin() });
+  const [clientId, setClientId] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [userId, setUserId] = useState('');
+  const { clients } = useClientOptions();
+  const { projects } = useProjectOptions(clientId || undefined);
+  const q = useApi<WorkloadResponse>('/workload', { ...range, tz: tzOffsetMin(), clientId, projectId, userId });
+  const everyone = useApi<WorkloadResponse>('/workload', { ...range, tz: tzOffsetMin() });
 
   return (
     <div>
@@ -130,10 +141,15 @@ export function WorkloadPage() {
           <Segmented
             value={preset}
             onChange={setPreset}
-            options={[{ id: 'thisWeek', label: t('workload.thisWeek') }, { id: 'nextWeek', label: t('workload.nextWeek') }, { id: 'thisMonth', label: t('workload.thisMonth') }]}
+            options={[{ id: 'today', label: t('common.today') }, { id: 'thisWeek', label: t('workload.thisWeek') }, { id: 'nextWeek', label: t('workload.nextWeek') }, { id: 'thisMonth', label: t('workload.thisMonth') }]}
           />
         }
       />
+      <FilterBar>
+        <FilterSelect value={clientId} onChange={(v) => { setClientId(v); setProjectId(''); }} allLabel={t('common.allClients')} options={clients.map((c) => ({ value: c.id, label: c.companyName }))} />
+        <FilterSelect value={projectId} onChange={setProjectId} allLabel={t('work.task.allProjects')} options={projects.map((p) => ({ value: p.id, label: p.name }))} />
+        <FilterSelect value={userId} onChange={setUserId} allLabel={t('att.allEmployees')} options={(everyone.data?.items ?? []).map((r) => ({ value: r.user.id, label: r.user.name }))} />
+      </FilterBar>
 
       <div className="mb-5 flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3.5 text-sm text-sky-950">
         <Info className="mt-0.5 size-4 shrink-0" />

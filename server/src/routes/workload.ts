@@ -14,6 +14,7 @@ import { endOfDayUtc, isDateOnly, parseDateOnly } from '../lib/dates';
 import { Errors } from '../lib/errors';
 import { asyncHandler, idParam, qs } from '../lib/http';
 import { and } from '../services/serializers';
+import { assignedTo, assigneeIdsOf } from '../services/tasks';
 import { DAY_MS, DEFAULT_WEEKLY_CAPACITY_HOURS, UTILIZATION_THRESHOLDS, dayStartMs, hoursOf, indicatorFor, round2, weekStartMs } from '../services/time';
 
 export const workloadRouter = Router();
@@ -62,15 +63,30 @@ workloadRouter.get(
   asyncHandler(async (req, res) => {
     const { scope } = ctxOf(req);
     const w = windowOf(req.query);
-    const members = await visibleMembers(scope);
+    const onlyUser = qs(req.query, 'userId');
+    const members = (await visibleMembers(scope)).filter((m) => !onlyUser || m.id === onlyUser);
     const ids = members.map((m) => m.id);
+    // optional project / client filters narrow the WORK that is counted (people stay listed)
+    const workFilter = and<Prisma.TaskWhereInput>(
+      taskWhere(scope),
+      { archivedAt: null },
+      qs(req.query, 'projectId') ? { projectId: qs(req.query, 'projectId') } : undefined,
+      qs(req.query, 'clientId') ? { clientId: qs(req.query, 'clientId') } : undefined,
+    );
+    const anyOf: Prisma.TaskWhereInput = { OR: [{ assignedToId: { in: ids } }, { assignees: { some: { userId: { in: ids } } } }] };
+    const assigneeSelect = { assignedToId: true, assignees: { select: { userId: true } } } satisfies Prisma.TaskSelect;
 
-    // Three bulk/grouped queries in total (no per-person loops with queries).
-    const [tasks, managed, logged] = await Promise.all([
+    // A handful of bulk/grouped queries in total (no per-person loops with queries).
+    const [tasks, completed, managed, logged] = await Promise.all([
       // open tasks the caller may see. A colleague's task the caller has no access to is not counted (no leaking of hidden work).
       prisma.task.findMany({
-        where: and<Prisma.TaskWhereInput>(taskWhere(scope), { assignedToId: { in: ids }, status: { not: 'DONE' } }),
-        select: { assignedToId: true, dueDate: true, estimatedHours: true, actualHours: true },
+        where: and<Prisma.TaskWhereInput>(workFilter, anyOf, { status: { not: 'DONE' } }),
+        select: { ...assigneeSelect, dueDate: true, estimatedHours: true, actualHours: true },
+        take: TASK_CAP,
+      }),
+      prisma.task.findMany({
+        where: and<Prisma.TaskWhereInput>(workFilter, anyOf, { status: 'DONE', completedAt: { gte: w.from, lte: w.to } }),
+        select: { ...assigneeSelect, actualHours: true },
         take: TASK_CAP,
       }),
       prisma.project.groupBy({
@@ -81,34 +97,53 @@ workloadRouter.get(
       // logged time: only what timeEntryWhere lets the caller see (own entries, or client entries with time.view_all)
       prisma.timeEntry.groupBy({
         by: ['userId'],
-        where: and<Prisma.TimeEntryWhereInput>(timeEntryWhere(scope), { userId: { in: ids }, endedAt: { not: null }, startedAt: { gte: w.from, lte: w.to } }),
+        where: and<Prisma.TimeEntryWhereInput>(
+          timeEntryWhere(scope),
+          { userId: { in: ids }, endedAt: { not: null }, startedAt: { gte: w.from, lte: w.to } },
+          qs(req.query, 'projectId') ? { projectId: qs(req.query, 'projectId') } : undefined,
+          qs(req.query, 'clientId') ? { clientId: qs(req.query, 'clientId') } : undefined,
+        ),
         _sum: { durationSec: true },
       }),
     ]);
 
-    type Acc = { open: number; overdue: number; dueInWindow: number; unestimated: number; plannedHours: number };
+    type Acc = { open: number; overdue: number; dueInWindow: number; dueToday: number; unestimated: number; plannedHours: number; completed: number };
+    const blank = (): Acc => ({ open: 0, overdue: 0, dueInWindow: 0, dueToday: 0, unestimated: 0, plannedHours: 0, completed: 0 });
     const acc = new Map<string, Acc>();
+    const tomorrow = new Date(w.today.getTime() + DAY_MS);
     for (const t of tasks) {
-      const key = t.assignedToId as string;
-      const a = acc.get(key) ?? { open: 0, overdue: 0, dueInWindow: 0, unestimated: 0, plannedHours: 0 };
-      a.open += 1;
-      if (t.dueDate) {
-        if (t.dueDate < w.today) a.overdue += 1;
-        if (t.dueDate >= w.from && t.dueDate <= w.to) a.dueInWindow += 1;
-        // Planned hours = REMAINING estimate (estimatedHours - hours already logged, never below 0) of open tasks that are
-        // due in the window or are overdue carry-over (due before it). Tasks without a due date are unscheduled: counted as open only.
-        if (t.dueDate <= w.to) {
-          if (t.estimatedHours === null) a.unestimated += 1;
-          else a.plannedHours += Math.max(0, t.estimatedHours - (t.actualHours ?? 0));
+      // a shared task counts for every assignee; its remaining estimate is split evenly between them
+      const people = assigneeIdsOf(t);
+      const share = people.length > 0 ? 1 / people.length : 1;
+      for (const key of people.filter((p) => ids.includes(p))) {
+        const a = acc.get(key) ?? blank();
+        a.open += 1;
+        if (t.dueDate) {
+          if (t.dueDate < w.today) a.overdue += 1;
+          if (t.dueDate >= w.today && t.dueDate < tomorrow) a.dueToday += 1;
+          if (t.dueDate >= w.from && t.dueDate <= w.to) a.dueInWindow += 1;
+          // Planned hours = REMAINING estimate (estimatedHours - hours already logged, never below 0) of open tasks that are
+          // due in the window or are overdue carry-over (due before it). Tasks without a due date are unscheduled: counted as open only.
+          if (t.dueDate <= w.to) {
+            if (t.estimatedHours === null) a.unestimated += 1;
+            else a.plannedHours += Math.max(0, t.estimatedHours - (t.actualHours ?? 0)) * share;
+          }
         }
+        acc.set(key, a);
       }
-      acc.set(key, a);
+    }
+    for (const t of completed) {
+      for (const key of assigneeIdsOf(t).filter((p) => ids.includes(p))) {
+        const a = acc.get(key) ?? blank();
+        a.completed += 1;
+        acc.set(key, a);
+      }
     }
     const managedBy = new Map(managed.map((m) => [m.projectManagerId, m._count._all]));
     const loggedBy = new Map(logged.map((l) => [l.userId, l._sum.durationSec ?? 0]));
 
     const items = members.map((m) => {
-      const a = acc.get(m.id) ?? { open: 0, overdue: 0, dueInWindow: 0, unestimated: 0, plannedHours: 0 };
+      const a = acc.get(m.id) ?? blank();
       const weekly = m.weeklyCapacityHours > 0 ? m.weeklyCapacityHours : DEFAULT_WEEKLY_CAPACITY_HOURS;
       const capacityHours = round2(weekly * w.weeks);
       const utilization = capacityHours > 0 ? a.plannedHours / capacityHours : 0;
@@ -117,6 +152,8 @@ workloadRouter.get(
         openTasks: a.open,
         overdueTasks: a.overdue,
         dueInWindow: a.dueInWindow,
+        dueToday: a.dueToday,
+        completedTasks: a.completed,
         unestimatedTasks: a.unestimated,
         estimatedHours: round2(a.plannedHours),
         loggedHours: hoursOf(loggedBy.get(m.id) ?? 0),
@@ -147,7 +184,7 @@ workloadRouter.get(
     const member = members.find((m) => m.id === userId);
     if (!member) throw Errors.notFound();
     const rows = await prisma.task.findMany({
-      where: and<Prisma.TaskWhereInput>(taskWhere(scope), { assignedToId: userId, status: { not: 'DONE' } }),
+      where: and<Prisma.TaskWhereInput>(taskWhere(scope), assignedTo(userId), { archivedAt: null, status: { not: 'DONE' } }),
       select: {
         id: true, title: true, status: true, priority: true, dueDate: true, estimatedHours: true, actualHours: true,
         project: { select: { id: true, name: true } }, client: { select: { id: true, companyName: true } },

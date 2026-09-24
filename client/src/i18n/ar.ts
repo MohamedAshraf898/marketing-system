@@ -9,6 +9,7 @@ import { contentAr } from './p2/content.ar';
 import { financeAr } from './p2/finance.ar';
 import { insightsAr } from './p2/insights.ar';
 import { adminAr } from './p2/admin.ar';
+import { phase3Ar } from './p2/phase3.ar';
 export const ar: Record<TKey, string> = {
   ...coreAr,
   ...crmAr,
@@ -18,8 +19,9 @@ export const ar: Record<TKey, string> = {
   ...financeAr,
   ...insightsAr,
   ...adminAr,
+  ...phase3Ar,
 
-  'app.name': 'نظام OG',
+  'app.name': 'فاموليا',
 
   // ── التنقل ──
   'nav.dashboard': 'لوحة التحكم', 'nav.clients': 'العملاء', 'nav.users': 'المستخدمون', 'nav.campaigns': 'الحملات', 'nav.deliverables': 'المخرجات',
@@ -29,7 +31,7 @@ export const ar: Record<TKey, string> = {
 
   // ── الدخول ──
   'auth.email': 'البريد الإلكتروني', 'auth.password': 'كلمة المرور', 'auth.login': 'تسجيل الدخول', 'auth.logout': 'تسجيل الخروج', 'auth.showPassword': 'إظهار كلمة المرور', 'auth.hidePassword': 'إخفاء كلمة المرور',
-  'login.title': 'أهلًا بعودتك', 'login.subtitle': 'سجّل الدخول إلى حسابك في نظام OG.',
+  'login.title': 'أهلًا بعودتك', 'login.subtitle': 'سجّل الدخول إلى حسابك في فاموليا.',
   'login.headline': 'كل حملة وموافقة وتقرير في مكان واحد هادئ.',
   'login.subheadline': 'راجع التصاميم ووافق عليها بلمسة واحدة وتابع الأداء، دون سلاسل رسائل بريدية لا تنتهي.',
   'login.point1': 'وافق أو اطلب التعديل في ثوانٍ', 'login.point2': 'تقارير أداء حقيقية ومحدَّثة دائمًا', 'login.point3': 'ملفاتك وبياناتك خاصة بشركتك فقط',

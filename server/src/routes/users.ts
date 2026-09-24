@@ -129,6 +129,7 @@ usersRouter.post(
         clientId: body.role === 'CLIENT' ? body.clientId! : null,
         locale: body.locale ?? 'en',
         passwordHash: await hashPassword(body.password),
+        trackAttendance: body.role === 'TEAM', // administrators can opt in from Attendance > Members
       },
       select: userSelect,
     });

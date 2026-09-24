@@ -96,8 +96,9 @@ export async function loadProjectStats(projectIds: string[], today = todayUtc())
   if (projectIds.length === 0) return out;
 
   const [byStatus, overdue, milestones] = await Promise.all([
-    prisma.task.groupBy({ by: ['projectId', 'status'], where: { projectId: { in: projectIds } }, _count: { _all: true } }),
-    prisma.task.groupBy({ by: ['projectId'], where: { projectId: { in: projectIds }, status: { not: 'DONE' }, dueDate: { lt: today } }, _count: { _all: true } }),
+    // progress follows top-level tasks (subtasks roll up into their parent); archived work is not counted
+    prisma.task.groupBy({ by: ['projectId', 'status'], where: { projectId: { in: projectIds }, parentId: null, archivedAt: null }, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ['projectId'], where: { projectId: { in: projectIds }, parentId: null, archivedAt: null, status: { not: 'DONE' }, dueDate: { lt: today } }, _count: { _all: true } }),
     prisma.milestone.findMany({
       where: { projectId: { in: projectIds } },
       select: { id: true, projectId: true, title: true, dueDate: true, completedAt: true, position: true },

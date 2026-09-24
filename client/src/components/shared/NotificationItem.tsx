@@ -1,4 +1,4 @@
-import { CheckCircle2, MessageSquare, PencilLine, Send, UserPlus, LifeBuoy, RefreshCw, Bell, type LucideIcon } from 'lucide-react';
+import { AtSign, CalendarCheck2, CheckCircle2, Eye, GitBranch, MessageSquare, Palmtree, PencilLine, Send, UserPlus, LifeBuoy, RefreshCw, Bell, Workflow, AlarmClock, type LucideIcon } from 'lucide-react';
 import type { NotificationRow } from '@/api/types';
 import { useI18n, type TKey } from '@/i18n';
 import { cx } from '@/components/ui/cx';
@@ -11,6 +11,20 @@ const ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
   REQUEST_STATUS_CHANGED: { icon: RefreshCw, tone: 'bg-violet-50 text-violet-700' },
   REQUEST_ASSIGNED: { icon: UserPlus, tone: 'bg-teal-50 text-teal-700' },
   NEW_COMMENT: { icon: MessageSquare, tone: 'bg-zinc-100 text-zinc-700' },
+  TASK_ASSIGNED: { icon: UserPlus, tone: 'bg-teal-50 text-teal-700' },
+  TASK_COMMENT: { icon: MessageSquare, tone: 'bg-zinc-100 text-zinc-700' },
+  TASK_MENTION: { icon: AtSign, tone: 'bg-brand-50 text-brand-700' },
+  TASK_STATUS_CHANGED: { icon: RefreshCw, tone: 'bg-violet-50 text-violet-700' },
+  TASK_REVIEW: { icon: Eye, tone: 'bg-violet-50 text-violet-700' },
+  TASK_DEPENDENCY_DONE: { icon: GitBranch, tone: 'bg-emerald-50 text-emerald-700' },
+  TASK_DUE_SOON: { icon: AlarmClock, tone: 'bg-amber-50 text-amber-700' },
+  TASK_OVERDUE: { icon: AlarmClock, tone: 'bg-rose-50 text-rose-700' },
+  TASK_AUTOMATION: { icon: Workflow, tone: 'bg-violet-50 text-violet-700' },
+  TASK_APPROVAL_REQUESTED: { icon: Send, tone: 'bg-amber-50 text-amber-700' },
+  LEAVE_REQUESTED: { icon: Palmtree, tone: 'bg-violet-50 text-violet-700' },
+  LEAVE_APPROVED: { icon: Palmtree, tone: 'bg-emerald-50 text-emerald-700' },
+  LEAVE_REJECTED: { icon: Palmtree, tone: 'bg-rose-50 text-rose-700' },
+  ATTENDANCE_CORRECTED: { icon: CalendarCheck2, tone: 'bg-amber-50 text-amber-700' },
 };
 
 /** Where a notification leads. `?open=<id>` opens the item's details panel on list pages. */
@@ -28,6 +42,8 @@ export const notificationLink = (n: Pick<NotificationRow, 'entity' | 'entityId'>
     case 'contract': return `/contracts?open=${id}`;
     case 'invoice': return `/invoices?open=${id}`;
     case 'report': return '/reports';
+    case 'leave': return '/attendance?tab=leave';
+    case 'attendance': return '/attendance';
     default: return null;
   }
 };
@@ -38,7 +54,9 @@ export function useNotificationText() {
     const key = `notif.${n.type}` as TKey;
     if (!has(key)) return n.type;
     const params: Record<string, string | number> = {};
-    for (const [k, v] of Object.entries(n.data ?? {})) params[k] = k === 'status' ? label('requestStatus', String(v)) : v;
+    for (const [k, v] of Object.entries(n.data ?? {})) {
+      params[k] = k === 'status' ? label('requestStatus', String(v)) : k === 'taskStatus' || (k === 'from' && n.type === 'TASK_STATUS_CHANGED') ? label('taskStatus', String(v)) : v;
+    }
     return t(key, params);
   };
 }

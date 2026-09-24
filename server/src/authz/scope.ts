@@ -162,11 +162,16 @@ export function projectWhere(s: Scope): Prisma.ProjectWhereInput {
       { projectManagerId: s.userId },
       { campaigns: { some: { id: { in: s.campaignIds } } } },
       { tasks: { some: { assignedToId: s.userId } } },
+      { tasks: { some: { assignees: { some: { userId: s.userId } } } } },
     ],
   };
 }
 
-/** Tasks are internal agency work: a CLIENT user matches nothing, ever. */
+/**
+ * Tasks through the STAFF API: a CLIENT user matches nothing, ever (clients only use clientTaskWhere, below).
+ * TEAM: tasks of their clients / campaigns, tasks they created, are assigned to (any assignee) or review, and tasks of
+ * projects they manage.
+ */
 export function taskWhere(s: Scope): Prisma.TaskWhereInput {
   if (s.role === 'ADMIN') return {};
   if (s.role === 'CLIENT') return { id: NONE };
@@ -174,11 +179,34 @@ export function taskWhere(s: Scope): Prisma.TaskWhereInput {
     OR: [
       { clientId: { in: s.fullClientIds } },
       { assignedToId: s.userId },
+      { assignees: { some: { userId: s.userId } } },
+      { reviewerId: s.userId },
       { createdById: s.userId },
       { campaignId: { in: s.campaignIds } },
       { project: { is: { projectManagerId: s.userId } } },
     ],
   };
+}
+
+/**
+ * The ONLY way a CLIENT user ever reaches a task (routes/clientTasks.ts): their own company's tasks that staff explicitly
+ * marked CLIENT_VISIBLE, not archived, and not inside an internal-only project. Staff never use this filter.
+ */
+export function clientTaskWhere(s: Scope): Prisma.TaskWhereInput {
+  if (s.role !== 'CLIENT' || !s.clientId) return { id: NONE };
+  return {
+    clientId: s.clientId,
+    visibility: 'CLIENT_VISIBLE',
+    archivedAt: null,
+    OR: [{ projectId: null }, { project: { is: { visibleToClient: true } } }],
+  };
+}
+
+/** Spaces (and the folders / lists inside them): internal spaces for all staff, client spaces only for staff of that client. */
+export function spaceWhere(s: Scope): Prisma.SpaceWhereInput {
+  if (s.role === 'ADMIN') return {};
+  if (s.role === 'CLIENT') return { id: NONE };
+  return { OR: [{ clientId: null }, { clientId: { in: s.visibleClientIds } }] };
 }
 
 /** Content calendar: clients only see items that were actually sent to them (their linked deliverable was submitted). */

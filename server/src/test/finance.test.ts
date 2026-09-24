@@ -546,7 +546,7 @@ describe('maintenance job', () => {
     const totalBefore = await prisma.notification.count();
     const auditBefore = await prisma.auditLog.count();
     const second = await runMaintenance();
-    expect(second).toEqual({ contractsExpiring: 0, contractsExpired: 0, invoicesOverdue: 0, taskReminders: 0 });
+    expect(second).toEqual({ contractsExpiring: 0, contractsExpired: 0, invoicesOverdue: 0, taskReminders: 0, attendanceDaysClosed: 0, recurringTasksCreated: 0, automationsRun: 0 });
     expect(await prisma.notification.count()).toBe(totalBefore);
     expect(await prisma.auditLog.count()).toBe(auditBefore);
   });

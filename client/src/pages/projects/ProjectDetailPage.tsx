@@ -22,9 +22,15 @@ import { DeliverablesPanel } from '@/components/panels/DeliverablesPanel';
 import { ProjectFormModal } from '@/components/forms/ProjectFormModal';
 import { UploadFileModal } from '@/components/forms/UploadFileModal';
 import { TasksPanel } from '@/components/panels/TasksPanel';
+import { ActivityFeed } from '@/components/panels/ActivityFeed';
+import { TaskDrawer } from '@/components/tasks/TaskDrawer';
+import { TaskTimeline } from '@/components/tasks/TaskViews';
+import { Avatar } from '@/components/ui/Avatar';
+import type { SharedTasksResponse } from '@/api/types.tasks';
+import type { Task } from '@/api/types.work';
 
-type Tab = 'overview' | 'tasks' | 'milestones' | 'campaigns' | 'deliverables' | 'files';
-const TABS: Tab[] = ['overview', 'tasks', 'milestones', 'campaigns', 'deliverables', 'files'];
+type Tab = 'overview' | 'tasks' | 'timeline' | 'team' | 'milestones' | 'campaigns' | 'deliverables' | 'files' | 'activity';
+const TABS: Tab[] = ['overview', 'tasks', 'timeline', 'team', 'milestones', 'campaigns', 'deliverables', 'files', 'activity'];
 type ModalKind = 'edit' | 'delete' | null;
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
@@ -198,11 +204,13 @@ export function ProjectDetailPage() {
         className="mb-6"
         tabs={[
           { id: 'overview', label: t('work.project.tabOverview') },
-          ...(staff ? [{ id: 'tasks' as Tab, label: t('work.project.tabTasks'), count: p.taskCounts?.total }] : []),
+          { id: 'tasks' as Tab, label: t('work.project.tabTasks'), count: staff ? p.taskCounts?.total : undefined },
+          ...(staff ? [{ id: 'timeline' as Tab, label: t('tasks.timeline') }, { id: 'team' as Tab, label: t('work.project.tabTeam') }] : []),
           { id: 'milestones', label: t('work.project.tabMilestones'), count: p.milestoneCounts.total },
           { id: 'campaigns', label: t('work.project.tabCampaigns'), count: p.counts?.campaigns ?? p.campaigns?.length },
           { id: 'deliverables', label: t('work.project.tabDeliverables'), count: p.counts?.deliverables },
           { id: 'files', label: t('work.project.tabFiles'), count: p.counts?.files },
+          { id: 'activity', label: t('work.project.tabActivity') },
         ]}
       />
 
@@ -239,6 +247,10 @@ export function ProjectDetailPage() {
       )}
 
       {tab === 'tasks' && staff && <TasksPanel projectId={id} />}
+      {tab === 'tasks' && !staff && <SharedProjectTasks projectId={id} />}
+      {tab === 'timeline' && staff && <ProjectTimeline projectId={id} />}
+      {tab === 'team' && staff && <ProjectTeam projectId={id} manager={p.projectManager} />}
+      {tab === 'activity' && <ActivityFeed projectId={id} />}
       {tab === 'milestones' && <MilestonesTab project={p} />}
       {tab === 'campaigns' && (
         <Card>
@@ -262,5 +274,68 @@ export function ProjectDetailPage() {
       {modal === 'edit' && <ProjectFormModal open onClose={close} project={p} />}
       <ConfirmDialog open={modal === 'delete'} onClose={close} onConfirm={() => remove.mutate(undefined)} loading={remove.isPending} title={t('work.project.deleteTitle')} message={t('work.project.deleteMessage', { name: p.name })} confirmLabel={t('common.delete')} />
     </div>
+  );
+}
+
+function ProjectTimeline({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <>
+      <TaskTimeline filters={{ projectId }} onOpen={setOpen} />
+      <TaskDrawer taskId={open} open={!!open} onClose={() => setOpen(null)} />
+    </>
+  );
+}
+
+/** Who works on the project: the manager + everybody assigned to its tasks, with their open / overdue counts. */
+function ProjectTeam({ projectId, manager }: { projectId: string; manager: Project['projectManager'] }) {
+  const { t, fmt } = useI18n();
+  const q = useApi<Paged<Task>>('/tasks', { projectId, pageSize: 100, archived: undefined });
+  const people = new Map<string, { id: string; name: string; open: number; overdue: number; done: number }>();
+  for (const task of q.data?.items ?? []) {
+    for (const a of task.assignees) {
+      const p = people.get(a.id) ?? { id: a.id, name: a.name, open: 0, overdue: 0, done: 0 };
+      if (task.status === 'DONE') p.done++; else p.open++;
+      if (task.overdue) p.overdue++;
+      people.set(a.id, p);
+    }
+  }
+  const rows = [...people.values()].sort((a, b) => b.open - a.open);
+  return (
+    <Card>
+      <CardHeader title={t('work.project.tabTeam')} subtitle={manager ? t('work.project.managedBy', { name: manager.name }) : undefined} />
+      <CardBody>
+        {q.isLoading ? <SkeletonRows rows={3} /> : rows.length === 0 ? <EmptyState compact icon={ListChecks} title={t('work.project.noTeam')} /> : (
+          <ul className="divide-y divide-line">
+            {rows.map((r) => (
+              <li key={r.id} className="flex items-center gap-3 py-3">
+                <Avatar name={r.name} size="sm" /><span className="flex-1 text-sm font-medium text-zinc-900">{r.name}</span>
+                <span className="text-xs text-zinc-500">{t('work.project.teamCounts', { open: fmt.number(r.open), done: fmt.number(r.done) })}</span>
+                {r.overdue > 0 && <span className="text-xs font-medium text-rose-600">{t('tasks.overdueN', { n: fmt.number(r.overdue) })}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/** CLIENT: the project's tasks the agency shared. */
+function SharedProjectTasks({ projectId }: { projectId: string }) {
+  const { t, fmt } = useI18n();
+  const q = useApi<SharedTasksResponse>('/client-tasks', { projectId, pageSize: 50 });
+  return (
+    <Card>
+      <CardBody>
+        {q.isLoading ? <SkeletonRows rows={3} /> : !q.data?.items.length ? <EmptyState compact icon={ListChecks} title={t('tasks.clientEmpty')} /> : (
+          <ul className="divide-y divide-line">
+            {q.data.items.map((x) => (
+              <li key={x.id}><Link to={`/tasks?open=${x.id}`} className="flex items-center gap-3 py-3 hover:text-brand-700"><span className="flex-1 text-sm font-medium">{x.title}</span><StatusBadge group="taskStatus" value={x.status} />{x.dueDate && <span className="text-xs text-zinc-500">{fmt.date(x.dueDate)}</span>}</Link></li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
   );
 }

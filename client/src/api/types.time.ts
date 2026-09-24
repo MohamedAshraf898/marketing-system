@@ -55,6 +55,8 @@ export interface WorkloadRow {
   openTasks: number;
   overdueTasks: number;
   dueInWindow: number;
+  dueToday?: number;
+  completedTasks?: number;
   unestimatedTasks: number;
   estimatedHours: number;
   loggedHours: number;

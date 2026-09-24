@@ -1,7 +1,7 @@
 import type { coreEn } from './core.en';
 
 export const coreAr: Record<keyof typeof coreEn, string> = {
-  'nav.projects': 'المشاريع', 'nav.tasks': 'مهامي', 'nav.content': 'تقويم المحتوى', 'nav.calendar': 'التقويم', 'nav.contracts': 'العقود',
+  'nav.projects': 'المشاريع', 'nav.tasks': 'المهام', 'nav.content': 'تقويم المحتوى', 'nav.calendar': 'التقويم', 'nav.contracts': 'العقود',
   'nav.invoices': 'الفواتير', 'nav.time': 'الوقت', 'nav.workload': 'عبء عمل الفريق', 'nav.onboarding': 'التهيئة', 'nav.search': 'بحث',
   'nav.section.work': 'العمل', 'nav.section.finance': 'المالية', 'nav.section.team': 'الفريق', 'nav.section.insight': 'الرؤى',
   'calendar.prev': 'السابق', 'calendar.next': 'التالي', 'calendar.today': 'اليوم', 'calendar.month': 'شهر', 'calendar.week': 'أسبوع',

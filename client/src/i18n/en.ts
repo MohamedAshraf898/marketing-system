@@ -8,6 +8,7 @@ import { contentEn } from './p2/content.en';
 import { financeEn } from './p2/finance.en';
 import { insightsEn } from './p2/insights.en';
 import { adminEn } from './p2/admin.en';
+import { phase3En } from './p2/phase3.en';
 export const en = {
   // ── phase 2 feature groups (see i18n/p2/*.en.ts) ──
   ...coreEn,
@@ -18,8 +19,9 @@ export const en = {
   ...financeEn,
   ...insightsEn,
   ...adminEn,
+  ...phase3En,
 
-  'app.name': 'OG System',
+  'app.name': 'Famolya',
 
   // ── navigation / shell ──
   'nav.dashboard': 'Dashboard', 'nav.clients': 'Clients', 'nav.users': 'Users', 'nav.campaigns': 'Campaigns', 'nav.deliverables': 'Deliverables',
@@ -29,7 +31,7 @@ export const en = {
 
   // ── auth ──
   'auth.email': 'Email', 'auth.password': 'Password', 'auth.login': 'Sign in', 'auth.logout': 'Sign out', 'auth.showPassword': 'Show password', 'auth.hidePassword': 'Hide password',
-  'login.title': 'Welcome back', 'login.subtitle': 'Sign in to your OG System account.',
+  'login.title': 'Welcome back', 'login.subtitle': 'Sign in to your Famolya account.',
   'login.headline': 'Every campaign, approval and report in one calm place.',
   'login.subheadline': 'Review creative, approve with one tap, and follow performance — without a single email thread.',
   'login.point1': 'Approve or request changes in seconds', 'login.point2': 'Real performance reports, always up to date', 'login.point3': 'Your files and data stay private to your company',

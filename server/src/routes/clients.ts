@@ -277,7 +277,7 @@ clientsRouter.get(
       prisma.request.count({ where: and<Prisma.RequestWhereInput>(requestWhere(scope), { clientId: id, status: { in: OPEN_REQUEST_STATUSES } }) }),
       prisma.file.count({ where: and<Prisma.FileWhereInput>(fileWhere(scope), { clientId: id }) }),
       prisma.project.count({ where: and<Prisma.ProjectWhereInput>(projectWhere(scope), { clientId: id }) }),
-      seesTasks ? prisma.task.count({ where: and<Prisma.TaskWhereInput>(taskWhere(scope), { clientId: id, status: { in: ACTIVE_TASK_STATUSES } }) }) : Promise.resolve(null),
+      seesTasks ? prisma.task.count({ where: and<Prisma.TaskWhereInput>(taskWhere(scope), { clientId: id, status: { in: ACTIVE_TASK_STATUSES }, archivedAt: null }) }) : Promise.resolve(null),
       seesInvoices ? prisma.invoice.count({ where: and<Prisma.InvoiceWhereInput>(invoiceWhere(scope), { clientId: id, status: { in: OUTSTANDING_INVOICE_STATUSES } }) }) : Promise.resolve(null),
       seesContracts
         ? prisma.contract.findFirst({

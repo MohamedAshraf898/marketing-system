@@ -3,11 +3,13 @@ import { authRouter, meRouter } from '../auth/routes';
 import { activityRouter } from './activity';
 import { analyticsRouter } from './analytics';
 import { approvalsRouter } from './approvals';
+import { attendanceRouter } from './attendance';
 import { auditLogsRouter } from './auditLogs';
 import { brandingRouter } from './branding';
 import { calendarRouter } from './calendar';
 import { campaignsRouter } from './campaigns';
 import { clientsRouter } from './clients';
+import { clientTasksRouter } from './clientTasks';
 import { clientContactsRouter, contactsRouter } from './contacts';
 import { contentRouter } from './content';
 import { contractsRouter } from './contracts';
@@ -16,6 +18,7 @@ import { deliverablesRouter } from './deliverables';
 import { filesRouter } from './files';
 import { clientNotesRouter, internalNotesRouter } from './internalNotes';
 import { invoicesRouter } from './invoices';
+import { leaveRouter } from './leave';
 import { notificationsRouter } from './notifications';
 import { clientOnboardingRouter, onboardingRouter } from './onboarding';
 import { permissionsRouter } from './permissions';
@@ -24,9 +27,13 @@ import { reportsRouter } from './reports';
 import { requestsRouter } from './requests';
 import { searchRouter } from './search';
 import { tasksRouter } from './tasks';
+import { teamReportsRouter } from './teamReports';
+import { spacesRouter, taskFieldsRouter, taskTagsRouter } from './taskSetup';
+import { taskAutomationsRouter, taskTemplatesRouter } from './taskTemplates';
 import { timeRouter } from './time';
 import { teamMembersRouter, usersRouter } from './users';
 import { workloadRouter } from './workload';
+import { holidaysRouter, workSchedulesRouter } from './workSchedules';
 
 export const api = Router();
 
@@ -54,14 +61,27 @@ api.use('/permissions', permissionsRouter);
 // work
 api.use('/projects', projectsRouter);
 api.use('/tasks', tasksRouter);
+api.use('/spaces', spacesRouter);
+api.use('/task-fields', taskFieldsRouter);
+api.use('/task-tags', taskTagsRouter);
+api.use('/task-templates', taskTemplatesRouter);
+api.use('/task-automations', taskAutomationsRouter);
+api.use('/client-tasks', clientTasksRouter);
 api.use('/time', timeRouter);
 api.use('/workload', workloadRouter);
+api.use('/team-reports', teamReportsRouter);
 api.use('/campaigns', campaignsRouter);
 api.use('/content', contentRouter);
 api.use('/deliverables', deliverablesRouter);
 api.use('/approvals', approvalsRouter);
 api.use('/requests', requestsRouter);
 api.use('/files', filesRouter);
+
+// attendance
+api.use('/attendance', attendanceRouter);
+api.use('/leave', leaveRouter);
+api.use('/work-schedules', workSchedulesRouter);
+api.use('/holidays', holidaysRouter);
 
 // money
 api.use('/contracts', contractsRouter);

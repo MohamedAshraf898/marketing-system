@@ -5,6 +5,7 @@ import { AppShell } from './components/layout/AppShell';
 import { BrandingProvider } from './components/layout/BrandingProvider';
 import { Spinner } from './components/ui/Feedback';
 import { ApprovalsPage } from './pages/approvals/ApprovalsPage';
+import { AttendancePage } from './pages/attendance/AttendancePage';
 import { AuditLogPage } from './pages/audit/AuditLogPage';
 import { CampaignDetailPage } from './pages/campaigns/CampaignDetailPage';
 import { CampaignsPage } from './pages/campaigns/CampaignsPage';
@@ -30,7 +31,12 @@ import { RequestDetailPage } from './pages/requests/RequestDetailPage';
 import { RequestsPage } from './pages/requests/RequestsPage';
 import { SearchPage } from './pages/search/SearchPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { MyTasksPage } from './pages/tasks/MyTasksPage';
+import { TaskSettingsPage } from './pages/tasks/TaskSettingsPage';
 import { TasksPage } from './pages/tasks/TasksPage';
+import { TeamTasksPage } from './pages/tasks/TeamTasksPage';
+import { TeamOverviewPage } from './pages/team/TeamOverviewPage';
+import { TeamReportsPage } from './pages/team/TeamReportsPage';
 import { TimePage } from './pages/time/TimePage';
 import { WorkloadPage } from './pages/workload/WorkloadPage';
 import { UsersPage } from './pages/users/UsersPage';
@@ -55,6 +61,20 @@ function Needs({ perm, children }: { perm: string; children: React.ReactNode }) 
   return <>{children}</>;
 }
 
+/** Staff need one of the permissions (CLIENT users are always sent home). */
+function NeedsAny({ perms, children }: { perms: string[]; children: React.ReactNode }) {
+  const { user, can } = useAuth();
+  if (!user || user.role === 'CLIENT' || !perms.some((p) => can(p))) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+/** Staff need the permission; CLIENT users pass (the page shows them their own, server-filtered view). */
+function StaffOrClient({ perm, children }: { perm: string; children: React.ReactNode }) {
+  const { user, can } = useAuth();
+  if (!user || (user.role !== 'CLIENT' && !can(perm))) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 /** Route-level role gate (the API enforces the same rules - this only avoids dead-end pages). */
 function Only({ roles, children }: { roles: Role[]; children: React.ReactNode }) {
   const { user } = useAuth();
@@ -75,7 +95,13 @@ export function App() {
         <Route path="onboarding" element={<Needs perm="clients.view"><OnboardingPage /></Needs>} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />
-        <Route path="tasks" element={<Needs perm="tasks.view"><TasksPage /></Needs>} />
+        <Route path="tasks" element={<StaffOrClient perm="tasks.view"><TasksPage /></StaffOrClient>} />
+        <Route path="tasks/settings" element={<NeedsAny perms={['tasks.templates', 'tasks.automations', 'tasks.manage_spaces']}><TaskSettingsPage /></NeedsAny>} />
+        <Route path="my-tasks" element={<Needs perm="tasks.view"><MyTasksPage /></Needs>} />
+        <Route path="team-tasks" element={<Needs perm="tasks.view_team"><TeamTasksPage /></Needs>} />
+        <Route path="attendance" element={<NeedsAny perms={['attendance.track', 'attendance.view_all', 'leave.approve', 'attendance.manage']}><AttendancePage /></NeedsAny>} />
+        <Route path="team-overview" element={<NeedsAny perms={['attendance.view_all', 'workload.view', 'tasks.view_team']}><TeamOverviewPage /></NeedsAny>} />
+        <Route path="team-reports" element={<NeedsAny perms={['attendance.view_all', 'tasks.view_team']}><TeamReportsPage /></NeedsAny>} />
         <Route path="time" element={<Needs perm="time.track"><TimePage /></Needs>} />
         <Route path="workload" element={<Needs perm="workload.view"><WorkloadPage /></Needs>} />
         <Route path="content" element={<ContentPage />} />

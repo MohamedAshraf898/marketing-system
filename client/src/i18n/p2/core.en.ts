@@ -1,6 +1,6 @@
 // Shared phase-2 strings: navigation, calendar widgets and generic labels used by more than one feature group.
 export const coreEn = {
-  'nav.projects': 'Projects', 'nav.tasks': 'My tasks', 'nav.content': 'Content calendar', 'nav.calendar': 'Calendar', 'nav.contracts': 'Contracts',
+  'nav.projects': 'Projects', 'nav.tasks': 'Tasks', 'nav.content': 'Content calendar', 'nav.calendar': 'Calendar', 'nav.contracts': 'Contracts',
   'nav.invoices': 'Invoices', 'nav.time': 'Time', 'nav.workload': 'Team workload', 'nav.onboarding': 'Onboarding', 'nav.search': 'Search',
   'nav.section.work': 'Work', 'nav.section.finance': 'Finance', 'nav.section.team': 'Team', 'nav.section.insight': 'Insight',
   'calendar.prev': 'Previous', 'calendar.next': 'Next', 'calendar.today': 'Today', 'calendar.month': 'Month', 'calendar.week': 'Week',

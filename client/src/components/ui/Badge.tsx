@@ -41,7 +41,14 @@ const TONE_MAP: Record<string, Record<string, Tone>> = {
   requestStatus: { NEW: 'blue', IN_PROGRESS: 'violet', WAITING_CLIENT: 'amber', COMPLETED: 'green', CANCELLED: 'neutral' },
   priority: { LOW: 'neutral', NORMAL: 'blue', HIGH: 'orange', URGENT: 'red' },
   role: { ADMIN: 'violet', TEAM: 'blue', CLIENT: 'teal' },
+  attendanceStatus: { PRESENT: 'green', LATE: 'amber', ABSENT: 'red', HALF_DAY: 'orange', ON_LEAVE: 'violet', DAY_OFF: 'neutral', HOLIDAY: 'teal', WFH: 'blue' },
+  presence: { WORKING: 'green', ON_BREAK: 'amber', CHECKED_OUT: 'blue', NOT_CHECKED_IN: 'neutral', ABSENT: 'red', ON_LEAVE: 'violet', DAY_OFF: 'neutral', HOLIDAY: 'teal' },
+  leaveStatus: { PENDING: 'amber', APPROVED: 'green', REJECTED: 'red', CANCELLED: 'neutral' },
+  taskVisibility: { INTERNAL: 'neutral', CLIENT_VISIBLE: 'teal' },
 };
+
+/** Colour of a status value (for dots, calendar cells, charts). */
+export const toneOf = (group: string, value: string): Tone => TONE_MAP[group]?.[value] ?? 'neutral';
 
 /** Status badge: colour comes from the value, text is translated. */
 export function StatusBadge({ group, value, className }: { group: keyof typeof TONE_MAP | string; value: string; className?: string }) {

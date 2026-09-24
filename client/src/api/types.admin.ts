@@ -1,5 +1,5 @@
 // Client-side types of the admin group: dashboards, branding, permissions admin and the audit log.
-import type { ClientStatus, ContentStatus, Role, TaskStatus } from '@shared/enums';
+import type { AttendanceStatus, ClientStatus, ContentStatus, PresenceState, Role, TaskStatus } from '@shared/enums';
 import type { AuditRow, DashboardResponse, Meta, UserRow } from './types';
 
 export interface BrandingInfo {
@@ -13,7 +13,7 @@ export interface BrandingInfo {
   updatedAt: string;
 }
 
-export const DEFAULT_BRANDING = { agencyName: 'OG System', primaryColor: '#4f46e5', secondaryColor: '#0f172a' } as const;
+export const DEFAULT_BRANDING = { agencyName: 'Famolya', primaryColor: '#4f46e5', secondaryColor: '#0f172a' } as const;
 
 // ── permissions admin ──
 export interface PermissionCatalog { groups: Array<{ id: string; permissions: string[] }>; defaults: string[]; adminOnly: string[] }
@@ -33,7 +33,13 @@ export interface DashActivity { id: string; action: string; entity: string; enti
 export interface DashClientProject { id: string; name: string; status: string; dueDate: string | null; progress: number; milestoneCounts: { total: number; done: number } }
 
 export interface DashboardExtras {
-  myTasks?: { open: number; overdue: number; dueToday: number; next: DashTask[] };
+  myTasks?: { open: number; overdue: number; dueToday: number; upcoming?: number; completedThisWeek?: number; next: DashTask[] };
+  // phase 3
+  myAttendance?: { date: string; status: AttendanceStatus; presence: PresenceState; checkInAt: string | null; checkOutAt: string | null; workedMinutes: number; lateMinutes: number; onBreak: boolean };
+  teamAttendance?: { date: string; members: number; presence: Partial<Record<PresenceState, number>>; late: Array<{ userId: string; name: string; lateMinutes: number; checkInAt: string | null }>; working: Array<{ userId: string; name: string; presence: PresenceState; checkInAt: string | null }> };
+  pendingLeave?: { count: number };
+  teamWorkload?: { overdueByPerson: Array<{ userId: string; name: string; overdue: number }> };
+  sharedTasks?: { open: number; items: Array<{ id: string; title: string; status: TaskStatus; dueDate: string | null; project: { id: string; name: string } | null }> };
   overdueTasks?: { total: number };
   projects?: { active: number; atRisk: number; atRiskItems: Array<{ id: string; name: string; status: string; dueDate: string | null; overdue: boolean; client: { id: string; companyName: string } }> } | DashClientProject[];
   upcomingDeadlines?: DashDeadline[];

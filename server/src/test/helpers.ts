@@ -1,9 +1,16 @@
+import http from 'node:http';
 import request from 'supertest';
 import { createApp } from '../app';
 import { hashPassword } from '../auth/password';
 import { prisma } from '../db';
 
-export const app = createApp();
+/**
+ * One listening server per test file. Handing supertest the bare Express app makes it start and stop a new server on a
+ * random port for EVERY request, which under parallel load intermittently fails with "socket hang up".
+ * It is listening long before the first request runs (requests only happen inside hooks / tests).
+ */
+export const app = http.createServer(createApp()).listen(0, '127.0.0.1');
+app.unref();
 export const PASSWORD = 'Passw0rd!test';
 
 export type Agent = ReturnType<typeof request.agent>;

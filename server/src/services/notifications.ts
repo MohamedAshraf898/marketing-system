@@ -1,10 +1,14 @@
+import type { Permission } from '../../../shared/src/permissions';
+import { effectivePermissions } from '../authz/permissions';
 import { prisma } from '../db';
 import { dispatchToChannels } from '../integrations/registry';
 
 export interface NotificationInput {
   type: string; // NEW_REQUEST | DELIVERABLE_SUBMITTED | DELIVERABLE_APPROVED | CHANGES_REQUESTED | REQUEST_STATUS_CHANGED | REQUEST_ASSIGNED | NEW_COMMENT
   // phase 2: TASK_ASSIGNED | TASK_DUE_SOON | TASK_OVERDUE | CONTRACT_EXPIRING | INVOICE_OVERDUE | REPORT_AVAILABLE (each needs a 'notif.<TYPE>' text)
-  entity: 'deliverable' | 'request' | 'campaign' | 'task' | 'project' | 'contract' | 'invoice' | 'report' | 'content' | 'client';
+  // phase 3: TASK_MENTION | TASK_STATUS_CHANGED | TASK_REVIEW | TASK_DEPENDENCY_DONE | TASK_APPROVAL_REQUESTED | TASK_AUTOMATION
+  //          LEAVE_REQUESTED | LEAVE_APPROVED | LEAVE_REJECTED | ATTENDANCE_CORRECTED
+  entity: 'deliverable' | 'request' | 'campaign' | 'task' | 'project' | 'contract' | 'invoice' | 'report' | 'content' | 'client' | 'leave' | 'attendance';
   entityId: string;
   data: Record<string, unknown>;
 }
@@ -23,6 +27,12 @@ export async function staffRecipients(clientId: string, campaignId?: string | nu
     select: { id: true },
   });
   return users.map((u) => u.id);
+}
+
+/** Active staff holding a permission (ADMIN always), e.g. everyone who may approve leave. */
+export async function permissionRecipients(perm: Permission): Promise<string[]> {
+  const users = await prisma.user.findMany({ where: { status: 'ACTIVE', role: { in: ['ADMIN', 'TEAM'] } }, select: { id: true, role: true, permissions: true } });
+  return users.filter((u) => effectivePermissions({ role: u.role, permissions: u.permissions }).has(perm)).map((u) => u.id);
 }
 
 export async function clientRecipients(clientId: string): Promise<string[]> {

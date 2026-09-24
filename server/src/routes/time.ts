@@ -218,7 +218,11 @@ timeRouter.post(
       await syncActualHours(tx, [target.taskId]);
       return created;
     });
-    res.status(201).json({ item: entryDto(item, now) });
+    // parallel entries are allowed (one meeting can be logged to two clients); the UI warns about them
+    const overlapping = await prisma.timeEntry.count({
+      where: { userId: ctx.user.id, id: { not: item.id }, startedAt: { lt: endedAt }, OR: [{ endedAt: null }, { endedAt: { gt: body.startedAt } }] },
+    });
+    res.status(201).json({ item: entryDto(item, now), overlapping });
   }),
 );
 

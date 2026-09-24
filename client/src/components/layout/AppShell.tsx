@@ -77,7 +77,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </nav>
-      <p className="px-6 py-4 text-[11px] text-zinc-600">OG System · v1.0</p>
+      <p className="px-6 py-4 text-[11px] text-zinc-600">Famolya · v1.0</p>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { prisma } from '../db';
 
-export const DEFAULT_BRANDING = { agencyName: 'OG System', primaryColor: '#4f46e5', secondaryColor: '#0f172a' } as const;
+export const DEFAULT_BRANDING = { agencyName: 'Famolya', primaryColor: '#4f46e5', secondaryColor: '#0f172a' } as const;
 
 /** The settings row is a singleton (id = "singleton"); it is created on first read. */
 export async function getSettings() {
-  return prisma.appSettings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton' } });
+  return prisma.appSettings.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton', agencyName: DEFAULT_BRANDING.agencyName } });
 }
 
 export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;

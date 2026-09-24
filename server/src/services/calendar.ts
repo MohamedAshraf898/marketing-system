@@ -67,7 +67,7 @@ export async function calendarEvents(scope: Scope, range: { from: string; to: st
     jobs.push(
       prisma.task
         .findMany({
-          where: and<Prisma.TaskWhereInput>(taskWhere(scope), { dueDate: inRange }),
+          where: and<Prisma.TaskWhereInput>(taskWhere(scope), { dueDate: inRange, archivedAt: null }),
           orderBy: { dueDate: 'asc' },
           take: PER_SOURCE,
           select: { id: true, title: true, status: true, dueDate: true, client: { select: { companyName: true } } },

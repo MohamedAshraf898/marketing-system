@@ -7,7 +7,7 @@ export interface Branding {
   agencyName: string;
   primaryColor: string;
   secondaryColor: string;
-  /** true when the agency name differs from the built-in "OG System" (the original wordmark is kept otherwise) */
+  /** true when the agency name differs from the built-in "Famolya" (the original wordmark is kept otherwise) */
   customName: boolean;
   logoUrl?: string;
   faviconUrl?: string;

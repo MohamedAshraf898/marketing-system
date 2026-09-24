@@ -86,7 +86,7 @@ export const workEn = {
   'work.task.allAssignees': 'All assignees',
 
   // ── enum labels ──
-  'taskStatus.TODO': 'To do', 'taskStatus.IN_PROGRESS': 'In progress', 'taskStatus.REVIEW': 'In review', 'taskStatus.BLOCKED': 'Blocked', 'taskStatus.DONE': 'Done',
+  'taskStatus.TODO': 'To do', 'taskStatus.IN_PROGRESS': 'In progress', 'taskStatus.REVIEW': 'In review', 'taskStatus.BLOCKED': 'Blocked', 'taskStatus.DONE': 'Completed',
   'projectStatus.PLANNING': 'Planning', 'projectStatus.IN_PROGRESS': 'In progress', 'projectStatus.REVIEW': 'In review', 'projectStatus.CLIENT_APPROVAL': 'Client approval',
   'projectStatus.COMPLETED': 'Completed', 'projectStatus.ON_HOLD': 'On hold', 'projectStatus.CANCELLED': 'Cancelled',
 } as const;

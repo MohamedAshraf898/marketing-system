@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarClock, CalendarDays, CheckCircle2, ClipboardCheck, FileSignature, FolderKanban, History, ListChecks, Rocket, Users } from 'lucide-react';
+import { AlarmClock, ArrowRight, Briefcase, CalendarClock, CalendarDays, CheckCircle2, ClipboardCheck, ClipboardList, FileSignature, FolderKanban, History, ListChecks, Palmtree, Rocket, Users } from 'lucide-react';
 import { CLIENT_STATUSES, CONTENT_STATUSES } from '@shared/enums';
 import type { DashActivity, DashClientProject, DashboardExtras } from '@/api/types.admin';
 import { useI18n } from '@/i18n';
@@ -39,11 +39,11 @@ export function useHoursFormat() {
 export function MyTasksCard({ d }: { d: NonNullable<DashboardExtras['myTasks']> }) {
   const { t, fmt } = useI18n();
   return (
-    <Section title={t('dash.myTasks')} to="/tasks" subtitle={t('dash.myTasksSummary', { open: fmt.number(d.open), overdue: fmt.number(d.overdue), today: fmt.number(d.dueToday) })}>
+    <Section title={t('dash.myTasks')} to="/my-tasks" subtitle={t('dash.myTasksSummary', { open: fmt.number(d.open), overdue: fmt.number(d.overdue), today: fmt.number(d.dueToday) })}>
       {d.next.length === 0 ? <Empty icon={ListChecks} title={t('dash.noTasks')} /> : d.next.map((task) => {
         const late = !!task.dueDate && new Date(task.dueDate).getTime() < Date.now() - 86_400_000;
         return (
-          <Link key={task.id} to="/tasks" className={rowCls}>
+          <Link key={task.id} to={`/tasks?open=${task.id}`} className={rowCls}>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-zinc-900">{task.title}</p>
               <p className="mt-0.5 truncate text-xs text-zinc-500">{[task.project?.name, task.client?.companyName].filter(Boolean).join(' · ') || t('common.unassigned')}</p>
@@ -57,7 +57,7 @@ export function MyTasksCard({ d }: { d: NonNullable<DashboardExtras['myTasks']> 
   );
 }
 
-const DEADLINE_LINK = { TASK: () => '/tasks', PROJECT: (id: string) => `/projects/${id}`, MILESTONE: (_id: string, p?: string | null) => (p ? `/projects/${p}` : '/projects'), CONTENT: () => '/content' } as const;
+const DEADLINE_LINK = { TASK: (id: string) => `/tasks?open=${id}`, PROJECT: (id: string) => `/projects/${id}`, MILESTONE: (_id: string, p?: string | null) => (p ? `/projects/${p}` : '/projects'), CONTENT: () => '/content' } as const;
 
 export function DeadlinesCard({ items }: { items: NonNullable<DashboardExtras['upcomingDeadlines']> }) {
   const { t, fmt } = useI18n();
@@ -221,7 +221,7 @@ const ACTIVITY_LINK: Record<string, (a: DashActivity, staff: boolean) => string 
   campaign: (a) => (a.entityId ? `/campaigns/${a.entityId}` : '/campaigns'),
   request: (a) => (a.entityId ? `/requests/${a.entityId}` : '/requests'),
   client: (a, staff) => (staff && a.entityId ? `/clients/${a.entityId}` : null),
-  task: (_a, staff) => (staff ? '/tasks' : null),
+  task: (a) => (a.entityId ? `/tasks?open=${a.entityId}` : '/tasks'),
   content: () => '/content',
   invoice: () => '/invoices',
   contract: () => '/contracts',
@@ -332,3 +332,55 @@ export function ApprovalsBanner({ count }: { count: number }) {
   );
 }
 
+
+// ───────────────────────── phase 3: attendance + tasks ─────────────────────────
+
+export function TeamAttendanceCard({ d, pendingLeave }: { d: NonNullable<DashboardExtras['teamAttendance']>; pendingLeave?: number }) {
+  const { t, fmt } = useI18n();
+  const p = d.presence;
+  const cells: Array<[string, number, string]> = [
+    [t('att.kpi.working'), (p.WORKING ?? 0) + (p.ON_BREAK ?? 0), 'text-emerald-700'],
+    [t('att.kpi.late'), d.late.length, 'text-amber-700'],
+    [t('att.kpi.absent'), p.ABSENT ?? 0, 'text-rose-600'],
+    [t('att.kpi.onLeave'), p.ON_LEAVE ?? 0, 'text-violet-700'],
+  ];
+  return (
+    <Section title={t('dash.teamToday')} to="/attendance?tab=team" subtitle={t('dash.teamMembers', { n: fmt.number(d.members) })}>
+      <div className="grid grid-cols-4 gap-3 px-5 py-4 sm:px-6">
+        {cells.map(([k, v, tone]) => <div key={k}><p className="truncate text-[12px] font-medium text-zinc-500">{k}</p><p className={cx('mt-1 text-xl font-semibold tabular', tone)}>{fmt.number(v)}</p></div>)}
+      </div>
+      {d.late.slice(0, 4).map((x) => (
+        <div key={x.userId} className={rowCls}><AlarmClock className="size-4 text-amber-600" /><span className="flex-1 truncate text-sm text-zinc-800">{x.name}</span><span className="text-xs text-amber-700 tabular">{t('att.lateBy', { d: t('att.min', { m: fmt.number(x.lateMinutes) }) })}</span></div>
+      ))}
+      {!!pendingLeave && (
+        <Link to="/attendance?tab=leave" className={rowCls}><Palmtree className="size-4 text-violet-600" /><span className="flex-1 text-sm font-medium text-zinc-900">{t('dash.pendingLeave', { n: fmt.number(pendingLeave) })}</span><ArrowRight className="size-4 text-zinc-400 rtl:rotate-180" /></Link>
+      )}
+    </Section>
+  );
+}
+
+export function OverdueByPersonCard({ d }: { d: NonNullable<DashboardExtras['teamWorkload']> }) {
+  const { t, fmt } = useI18n();
+  return (
+    <Section title={t('dash.overdueByPerson')} to="/team-tasks">
+      {d.overdueByPerson.length === 0 ? <Empty icon={CheckCircle2} title={t('team.noOverdue')} /> : d.overdueByPerson.map((x) => (
+        <div key={x.userId} className={rowCls}><Briefcase className="size-4 text-zinc-400" /><span className="flex-1 truncate text-sm text-zinc-800">{x.name}</span><Badge tone="red" dot={false}>{fmt.number(x.overdue)}</Badge></div>
+      ))}
+    </Section>
+  );
+}
+
+export function SharedTasksCard({ d }: { d: NonNullable<DashboardExtras['sharedTasks']> }) {
+  const { t, fmt } = useI18n();
+  return (
+    <Section title={t('dash.sharedTasks')} to="/tasks" subtitle={t('dash.sharedTasksHint', { n: fmt.number(d.open) })}>
+      {d.items.length === 0 ? <Empty icon={ClipboardList} title={t('tasks.clientEmpty')} /> : d.items.map((x) => (
+        <Link key={x.id} to={`/tasks?open=${x.id}`} className={rowCls}>
+          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-zinc-900">{x.title}</p>{x.project && <p className="truncate text-xs text-zinc-500">{x.project.name}</p>}</div>
+          <StatusBadge group="taskStatus" value={x.status} />
+          {x.dueDate && <span className="shrink-0 text-xs text-zinc-500 tabular">{fmt.date(x.dueDate)}</span>}
+        </Link>
+      ))}
+    </Section>
+  );
+}

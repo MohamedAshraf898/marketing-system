@@ -130,11 +130,24 @@ const builders: Record<SearchType, Builder> = {
     };
   },
   task: async (scope, term, take) => {
+    // title / description plus who and where: assignee, client, project, campaign and tags (all inside the caller's task scope)
     const rows = await prisma.task.findMany({
-      where: and<Prisma.TaskWhereInput>(taskWhere(scope), contains(['title', 'description'], term)),
+      where: and<Prisma.TaskWhereInput>(taskWhere(scope), { archivedAt: null }, {
+        OR: [
+          ...contains(['title', 'description'], term).OR,
+          { client: { is: { companyName: { contains: term } } } },
+          { project: { is: { name: { contains: term } } } },
+          { campaign: { is: { name: { contains: term } } } },
+          { assignees: { some: { user: { name: { contains: term } } } } },
+          { tagLinks: { some: { tag: { name: { contains: term } } } } },
+        ],
+      }),
       orderBy: { updatedAt: 'desc' },
       take,
-      select: { id: true, title: true, status: true, description: true, client: { select: { companyName: true } }, project: { select: { name: true } } },
+      select: {
+        id: true, title: true, status: true, description: true, client: { select: { companyName: true } }, project: { select: { name: true } }, campaign: { select: { name: true } },
+        assignees: { select: { user: { select: { name: true } } } }, tagLinks: { select: { tag: { select: { name: true } } } },
+      },
     });
     return {
       rows,
@@ -144,7 +157,7 @@ const builders: Record<SearchType, Builder> = {
       },
       values: (r) => {
         const x = r as (typeof rows)[number];
-        return [x.title, x.description];
+        return [x.title, x.description, x.client?.companyName, x.project?.name, x.campaign?.name, ...x.assignees.map((a) => a.user.name), ...x.tagLinks.map((l) => l.tag.name)];
       },
     };
   },

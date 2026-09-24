@@ -303,6 +303,9 @@ describe('schema hygiene', () => {
       ClientType: enums.CLIENT_TYPES, OnboardingStatus: enums.ONBOARDING_STATUSES, Priority: enums.PRIORITIES, ProjectStatus: enums.PROJECT_STATUSES,
       TaskStatus: enums.TASK_STATUSES, SocialPlatform: enums.SOCIAL_PLATFORMS, ContentType: enums.CONTENT_TYPES, ContentStatus: enums.CONTENT_STATUSES,
       ContractStatus: enums.CONTRACT_STATUSES, InvoiceStatus: enums.INVOICE_STATUSES,
+      AttendanceStatus: enums.ATTENDANCE_STATUSES, LeaveType: enums.LEAVE_TYPES, LeaveStatus: enums.LEAVE_STATUSES,
+      TaskVisibility: enums.TASK_VISIBILITIES, DependencyType: enums.DEPENDENCY_TYPES, RecurrenceFrequency: enums.RECURRENCE_FREQUENCIES,
+      CustomFieldType: enums.CUSTOM_FIELD_TYPES, AutomationTrigger: enums.AUTOMATION_TRIGGERS, AutomationAction: enums.AUTOMATION_ACTIONS,
     };
     for (const [name, values] of Object.entries(map)) expect(fromPrisma(name), name).toEqual([...values]);
   });

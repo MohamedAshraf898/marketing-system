@@ -2,7 +2,7 @@
   "name": "og-system",
   "version": "1.0.0",
   "private": true,
-  "description": "OG System - Agency Management + Client Portal (self-hosted, no paid services)",
+  "description": "Famolya - Agency Management + Client Portal (self-hosted, no paid services)",
   "workspaces": [
     "client",
     "server"

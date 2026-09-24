@@ -1,4 +1,4 @@
-// OG System - Prisma schema (SQLite)
+// Famolya - Prisma schema (SQLite)
 // After editing this file run:  npx prisma migrate dev --name <change>
 
 generator client {
@@ -199,6 +199,77 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+// ── phase 3: attendance ──
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+  DAY_OFF
+  HOLIDAY
+  WFH
+}
+
+enum LeaveType {
+  VACATION
+  SICK
+  PERSONAL
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ── phase 3: task management ──
+
+enum TaskVisibility {
+  INTERNAL
+  CLIENT_VISIBLE
+}
+
+enum DependencyType {
+  BLOCKS
+  RELATED
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  CHECKBOX
+}
+
+enum AutomationTrigger {
+  TASK_CREATED
+  STATUS_CHANGED
+  TASK_ASSIGNED
+  TASK_OVERDUE
+}
+
+enum AutomationAction {
+  NOTIFY_ASSIGNEES
+  NOTIFY_REVIEWER
+  NOTIFY_USER
+  CREATE_TASK
+  SET_PRIORITY
+  ASSIGN_USER
+  REQUEST_CLIENT_APPROVAL
+}
+
 // ─────────────────────────── Models ───────────────────────────
 
 model Client {
@@ -250,6 +321,7 @@ model Client {
   onboardingItems OnboardingItem[]
   internalNoteRows InternalNote[]
   timeEntries     TimeEntry[]
+  spaces          Space[]
 
   @@index([status])
   @@index([accountManagerId])
@@ -314,7 +386,12 @@ model User {
   permissions         String? // JSON array of granted permission keys (TEAM). null = role defaults. ADMIN always has all.
   weeklyCapacityHours Int     @default(40)
 
-  client Client? @relation(fields: [clientId], references: [id])
+  // ── phase 3 ──
+  workScheduleId  String? // null = the default work schedule
+  trackAttendance Boolean @default(true) // appears on the attendance roster (TEAM by default; ADMIN opt-in)
+
+  client       Client?       @relation(fields: [clientId], references: [id])
+  workSchedule WorkSchedule? @relation(fields: [workScheduleId], references: [id], onDelete: SetNull)
 
   sessions            Session[]
   clientAssignments   ClientAssignment[]
@@ -343,6 +420,14 @@ model User {
   proofingComments    ProofingComment[]
   contractsCreated    Contract[]      @relation("ContractCreator")
   invoicesCreated     Invoice[]       @relation("InvoiceCreator")
+
+  // ── phase 3 ──
+  attendances        Attendance[]     @relation("AttendanceUser")
+  attendanceFixes    Attendance[]     @relation("AttendanceCorrector")
+  leaveRequests      LeaveRequest[]   @relation("LeaveRequester")
+  leaveReviews       LeaveRequest[]   @relation("LeaveReviewer")
+  taskAssignments    TaskAssignee[]
+  tasksReviewing     Task[]           @relation("TaskReviewer")
 
   @@index([role])
   @@index([clientId])
@@ -453,6 +538,7 @@ model Deliverable {
   files     File[]
   proofing  ProofingComment[]
   contentItem ContentItem?
+  tasks     Task[]
 
   @@index([clientId, status])
   @@index([campaignId])
@@ -503,6 +589,7 @@ model Request {
   assignedTo User?     @relation("RequestAssignee", fields: [assignedToId], references: [id])
   comments   Comment[]
   files      File[]
+  tasks      Task[]
 
   @@index([clientId, status])
   @@index([campaignId])
@@ -675,6 +762,8 @@ model Project {
   invoices       Invoice[]
   timeEntries    TimeEntry[]
   internalNotes  InternalNote[]
+  folders        Folder[]
+  taskLists      TaskList[]
 
   @@index([clientId, status])
   @@index([status, dueDate])
@@ -697,7 +786,8 @@ model Milestone {
   @@index([projectId, position])
 }
 
-// Tasks are INTERNAL agency work: CLIENT users can never read them.
+// Tasks are INTERNAL agency work by default. A CLIENT user only ever sees tasks of their own company that were explicitly
+// marked CLIENT_VISIBLE, and only through the client-facing API (routes/clientTasks.ts) with a stripped-down shape.
 model Task {
   id             String     @id @default(cuid())
   projectId      String?
@@ -705,10 +795,10 @@ model Task {
   campaignId     String?
   title          String
   description    String?
-  assignedToId   String?
+  assignedToId   String? // primary assignee (kept for compatibility); every assignee also has a TaskAssignee row
   createdById    String?
   priority       Priority   @default(NORMAL)
-  status         TaskStatus @default(TODO)
+  status         TaskStatus @default(TODO) // the status CATEGORY - custom statuses map onto one of these
   dueDate        DateTime?
   completedAt    DateTime?
   estimatedHours Float?
@@ -716,22 +806,62 @@ model Task {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  client     Client?   @relation(fields: [clientId], references: [id])
-  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  assignedTo User?     @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  createdBy  User?     @relation("TaskCreator", fields: [createdById], references: [id])
-  checklist  TaskChecklistItem[]
-  comments   TaskComment[]
-  files      File[]
-  timeEntries TimeEntry[]
+  // ── phase 3: hierarchy, planning, links ──
+  listId              String?
+  parentId            String?
+  depth               Int            @default(0) // 0 = top-level task, 1 = subtask, ...
+  position            Float          @default(0) // manual order inside a list / board column / parent
+  startDate           DateTime?
+  visibility          TaskVisibility @default(INTERNAL)
+  reviewerId          String?
+  deliverableId       String?
+  requestId           String?
+  customStatusId      String?
+  blockOnDependencies Boolean        @default(false) // true: cannot start until every blocking task is completed
+  archivedAt          DateTime?
+  recurrenceSourceId  String? // set on tasks generated by a recurrence
+  occurrenceDate      DateTime? // the occurrence (date-only) this generated task stands for
 
+  project      Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  client       Client?           @relation(fields: [clientId], references: [id])
+  campaign     Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  assignedTo   User?             @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy    User?             @relation("TaskCreator", fields: [createdById], references: [id])
+  reviewer     User?             @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  list         TaskList?         @relation(fields: [listId], references: [id], onDelete: SetNull)
+  parent       Task?             @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks     Task[]            @relation("Subtasks")
+  deliverable  Deliverable?      @relation(fields: [deliverableId], references: [id], onDelete: SetNull)
+  request      Request?          @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  customStatus TaskStatusOption? @relation(fields: [customStatusId], references: [id], onDelete: SetNull)
+  recurrenceSource Task?         @relation("RecurrenceInstances", fields: [recurrenceSourceId], references: [id], onDelete: SetNull)
+  recurrenceInstances Task[]     @relation("RecurrenceInstances")
+  checklist    TaskChecklistItem[]
+  comments     TaskComment[]
+  files        File[]
+  timeEntries  TimeEntry[]
+  assignees    TaskAssignee[]
+  tagLinks     TaskTagLink[]
+  fieldValues  TaskCustomFieldValue[]
+  dependencies TaskDependency[]  @relation("DependencyTask")
+  dependents   TaskDependency[]  @relation("DependencyOn")
+  recurrence   TaskRecurrence?
+
+  @@unique([recurrenceSourceId, occurrenceDate]) // a recurrence can never generate the same occurrence twice
   @@index([assignedToId, status])
   @@index([clientId, status])
   @@index([projectId, status])
   @@index([campaignId])
   @@index([dueDate])
   @@index([status, dueDate])
+  @@index([listId, status, position])
+  @@index([parentId, position])
+  @@index([startDate])
+  @@index([archivedAt])
+  @@index([clientId, visibility])
+  @@index([deliverableId])
+  @@index([requestId])
+  @@index([reviewerId])
 }
 
 model TaskChecklistItem {
@@ -748,18 +878,361 @@ model TaskChecklistItem {
   @@index([taskId, position])
 }
 
-// Internal discussion on a task (staff only, never mixed with client-visible comments).
+// Discussion on a task. Staff comments are internal unless explicitly shared (clientVisible) on a CLIENT_VISIBLE task;
+// comments written by a client are always clientVisible. CLIENT users never receive an internal comment.
 model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  comment   String
-  createdAt DateTime @default(now())
+  id            String     @id @default(cuid())
+  taskId        String
+  userId        String
+  comment       String
+  createdAt     DateTime   @default(now())
+  // ── phase 3 ──
+  editedAt      DateTime?
+  authorType    AuthorType @default(TEAM)
+  clientVisible Boolean    @default(false)
+  mentions      String? // JSON array of mentioned user ids (validated server-side)
+  attachmentIds String? // JSON array of File ids attached to this task (validated server-side)
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
 
   @@index([taskId, createdAt])
+  @@index([taskId, clientVisible])
+}
+
+// ─────────────────────────── Phase 3: task hierarchy (Workspace = the agency itself) ───────────────────────────
+
+// Top-level container. A space may belong to one client (then only staff with access to that client see it).
+model Space {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  color       String    @default("#6366f1")
+  clientId    String?
+  position    Int       @default(0)
+  archivedAt  DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  client       Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  folders      Folder[]
+  lists        TaskList[]
+  statuses     TaskStatusOption[]
+  customFields TaskCustomField[]
+
+  @@index([position])
+  @@index([clientId])
+}
+
+model Folder {
+  id         String    @id @default(cuid())
+  spaceId    String
+  name       String
+  projectId  String? // optional link to an agency project
+  position   Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  space   Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  project Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  lists   TaskList[]
+
+  @@index([spaceId, position])
+  @@index([projectId])
+}
+
+// A list lives directly in a space or inside a folder. Linked to a project, its new tasks inherit that project + client.
+model TaskList {
+  id          String    @id @default(cuid())
+  spaceId     String
+  folderId    String?
+  projectId   String?
+  name        String
+  description String?
+  color       String?
+  position    Int       @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  space   Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  folder  Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tasks   Task[]
+
+  @@index([spaceId, folderId, position])
+  @@index([projectId])
+}
+
+// Custom status of a space. `category` is the built-in status it behaves as (dashboards, progress, overdue ...).
+model TaskStatusOption {
+  id        String     @id @default(cuid())
+  spaceId   String
+  name      String
+  color     String     @default("#71717a")
+  category  TaskStatus
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  space Space  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@index([spaceId, position])
+}
+
+model TaskAssignee {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+model TaskTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#71717a")
+  createdAt DateTime @default(now())
+
+  links TaskTagLink[]
+}
+
+model TaskTagLink {
+  id     String @id @default(cuid())
+  taskId String
+  tagId  String
+
+  task Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag  TaskTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, tagId])
+  @@index([tagId])
+}
+
+// Field definition. spaceId = null -> available in every space.
+model TaskCustomField {
+  id        String          @id @default(cuid())
+  spaceId   String?
+  name      String
+  type      CustomFieldType
+  options   String? // JSON array of strings (SELECT)
+  position  Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  space  Space?                 @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  values TaskCustomFieldValue[]
+
+  @@index([spaceId, position])
+}
+
+model TaskCustomFieldValue {
+  id        String   @id @default(cuid())
+  taskId    String
+  fieldId   String
+  value     String // normalised text form (number, yyyy-mm-dd, "true"/"false", option)
+  updatedAt DateTime @updatedAt
+
+  task  Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field TaskCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fieldId])
+  @@index([fieldId])
+}
+
+// BLOCKS: `dependsOn` blocks `task` (task is "blocked by" dependsOn).  RELATED: plain two-way link (stored once).
+model TaskDependency {
+  id          String         @id @default(cuid())
+  taskId      String
+  dependsOnId String
+  type        DependencyType @default(BLOCKS)
+  createdById String?
+  createdAt   DateTime       @default(now())
+
+  task      Task @relation("DependencyTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("DependencyOn", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+  @@index([dependsOnId])
+}
+
+// Reusable blueprint: one parent task + its subtasks (items).
+model TaskTemplate {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  taskTitle       String
+  taskDescription String?
+  priority        Priority @default(NORMAL)
+  estimatedHours  Float?
+  checklist       String? // JSON array of strings
+  tags            String? // JSON array of tag names
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items TaskTemplateItem[]
+
+  @@index([name])
+}
+
+model TaskTemplateItem {
+  id             String  @id @default(cuid())
+  templateId     String
+  title          String
+  description    String?
+  position       Int     @default(0)
+  estimatedHours Float?
+  dueOffsetDays  Int? // due date = start of the generated task + N days
+
+  template TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, position])
+}
+
+// The task it hangs off is the blueprint; each occurrence becomes a new Task (recurrenceSourceId + occurrenceDate unique).
+model TaskRecurrence {
+  id        String              @id @default(cuid())
+  taskId    String              @unique
+  frequency RecurrenceFrequency
+  interval  Int                 @default(1) // every N days / weeks / months
+  weekdays  String? // WEEKLY: "1,4" (0 = Sunday)
+  monthDay  Int? // MONTHLY: 1..31 (clamped to the month length)
+  nextDate  DateTime // date-only: next occurrence to generate
+  endDate   DateTime?
+  active    Boolean             @default(true)
+  lastRunAt DateTime?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([active, nextDate])
+}
+
+// Simple internal "when X then Y" rules. Scoped to a space or list (both null = everywhere).
+model TaskAutomation {
+  id            String            @id @default(cuid())
+  name          String
+  enabled       Boolean           @default(true)
+  spaceId       String?
+  listId        String?
+  trigger       AutomationTrigger
+  triggerStatus TaskStatus? // STATUS_CHANGED: only when the task moves INTO this status (null = any change)
+  action        AutomationAction
+  config        String? // JSON, depends on the action
+  runCount      Int               @default(0)
+  lastRunAt     DateTime?
+  createdById   String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([enabled, trigger])
+}
+
+// ─────────────────────────── Phase 3: attendance ───────────────────────────
+
+model WorkSchedule {
+  id             String   @id @default(cuid())
+  name           String
+  timezone       String   @default("UTC") // IANA zone the times below are in
+  workDays       String   @default("1,2,3,4,5") // 0 = Sunday ... 6 = Saturday
+  startTime      String   @default("09:00")
+  endTime        String   @default("17:00")
+  breakMinutes   Int      @default(60) // unpaid break included in the day
+  graceMinutes   Int      @default(10) // check-in within start + grace is on time
+  minimumMinutes Int      @default(240) // worked less than this on a checked-out day -> HALF_DAY
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users       User[]
+  attendances Attendance[]
+}
+
+// One row per person per (schedule-local) day. Timestamps are ALWAYS set by the server.
+model Attendance {
+  id                String           @id @default(cuid())
+  userId            String
+  date              DateTime // date-only (UTC midnight) of the local work day
+  scheduleId        String?
+  checkInAt         DateTime?
+  checkOutAt        DateTime?
+  remote            Boolean          @default(false)
+  status            AttendanceStatus
+  statusLocked      Boolean          @default(false) // an administrator set the status by hand
+  breakMinutes      Int              @default(0)
+  workedMinutes     Int              @default(0)
+  expectedMinutes   Int              @default(0)
+  lateMinutes       Int              @default(0)
+  earlyLeaveMinutes Int              @default(0)
+  overtimeMinutes   Int              @default(0)
+  notes             String?
+  isManual          Boolean          @default(false) // corrected / created by an administrator
+  correctedById     String?
+  correctedAt       DateTime?
+  leaveRequestId    String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user         User              @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  schedule     WorkSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  correctedBy  User?             @relation("AttendanceCorrector", fields: [correctedById], references: [id], onDelete: SetNull)
+  leaveRequest LeaveRequest?     @relation(fields: [leaveRequestId], references: [id], onDelete: SetNull)
+  breaks       AttendanceBreak[]
+
+  @@unique([userId, date])
+  @@index([date, status])
+  @@index([leaveRequestId])
+}
+
+model AttendanceBreak {
+  id           String    @id @default(cuid())
+  attendanceId String
+  startAt      DateTime
+  endAt        DateTime?
+  createdAt    DateTime  @default(now())
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceId, startAt])
+}
+
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique // date-only
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model LeaveRequest {
+  id              String      @id @default(cuid())
+  userId          String
+  type            LeaveType
+  startDate       DateTime // date-only, inclusive
+  endDate         DateTime // date-only, inclusive
+  days            Int         @default(0) // working days covered (by the person's schedule)
+  reason          String?
+  status          LeaveStatus @default(PENDING)
+  reviewedById    String? // who approved / rejected
+  reviewedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user        User         @relation("LeaveRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy  User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  attendances Attendance[]
+
+  @@index([userId, startDate])
+  @@index([status, startDate])
 }
 
 // Content calendar entry. Client approval is NOT a second system: when sent for approval the item gets a linked
@@ -927,7 +1400,7 @@ model TimeEntry {
 // Single row (id = "singleton"): agency name, colours, logo and favicon.
 model AppSettings {
   id             String   @id @default("singleton")
-  agencyName     String   @default("OG System")
+  agencyName     String   @default("Famolya")
   primaryColor   String   @default("#4f46e5")
   secondaryColor String   @default("#0f172a")
   logoKey        String?

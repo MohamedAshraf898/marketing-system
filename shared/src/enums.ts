@@ -27,6 +27,19 @@ export const CONTENT_TYPES = ['POST', 'CAROUSEL', 'REEL', 'STORY', 'VIDEO', 'ART
 export const CONTENT_STATUSES = ['IDEA', 'DRAFT', 'IN_REVIEW', 'CLIENT_APPROVAL', 'APPROVED', 'SCHEDULED', 'PUBLISHED', 'REJECTED'] as const;
 export const CONTRACT_STATUSES = ['DRAFT', 'ACTIVE', 'EXPIRING', 'EXPIRED', 'TERMINATED'] as const;
 export const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PENDING', 'PAID', 'OVERDUE', 'CANCELLED'] as const;
+// ── phase 3: attendance + task management ──
+export const ATTENDANCE_STATUSES = ['PRESENT', 'LATE', 'ABSENT', 'HALF_DAY', 'ON_LEAVE', 'DAY_OFF', 'HOLIDAY', 'WFH'] as const;
+export const LEAVE_TYPES = ['VACATION', 'SICK', 'PERSONAL', 'OTHER'] as const;
+export const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
+export const TASK_VISIBILITIES = ['INTERNAL', 'CLIENT_VISIBLE'] as const;
+export const DEPENDENCY_TYPES = ['BLOCKS', 'RELATED'] as const;
+export const RECURRENCE_FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'CUSTOM'] as const;
+export const CUSTOM_FIELD_TYPES = ['TEXT', 'NUMBER', 'DATE', 'SELECT', 'CHECKBOX'] as const;
+export const AUTOMATION_TRIGGERS = ['TASK_CREATED', 'STATUS_CHANGED', 'TASK_ASSIGNED', 'TASK_OVERDUE'] as const;
+export const AUTOMATION_ACTIONS = ['NOTIFY_ASSIGNEES', 'NOTIFY_REVIEWER', 'NOTIFY_USER', 'CREATE_TASK', 'SET_PRIORITY', 'ASSIGN_USER', 'REQUEST_CLIENT_APPROVAL'] as const;
+/** Live state of a person on the daily attendance board (derived, not stored). */
+export const PRESENCE_STATES = ['WORKING', 'ON_BREAK', 'CHECKED_OUT', 'NOT_CHECKED_IN', 'ABSENT', 'ON_LEAVE', 'DAY_OFF', 'HOLIDAY'] as const;
+
 /** Derived approval state of a content item (comes from its linked deliverable - there is no second approval system). */
 export const CONTENT_APPROVAL_STATUSES = ['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'CHANGES_REQUESTED'] as const;
 
@@ -55,6 +68,16 @@ export type ContentStatus = (typeof CONTENT_STATUSES)[number];
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export type ContentApprovalStatus = (typeof CONTENT_APPROVAL_STATUSES)[number];
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+export type LeaveType = (typeof LEAVE_TYPES)[number];
+export type LeaveStatus = (typeof LEAVE_STATUSES)[number];
+export type TaskVisibility = (typeof TASK_VISIBILITIES)[number];
+export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
+export type RecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+export type AutomationTrigger = (typeof AUTOMATION_TRIGGERS)[number];
+export type AutomationAction = (typeof AUTOMATION_ACTIONS)[number];
+export type PresenceState = (typeof PRESENCE_STATES)[number];
 
 /** Request statuses that count as "open" on dashboards. */
 export const OPEN_REQUEST_STATUSES: RequestStatus[] = ['NEW', 'IN_PROGRESS', 'WAITING_CLIENT'];

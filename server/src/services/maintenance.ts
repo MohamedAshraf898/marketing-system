@@ -1,14 +1,18 @@
-// Owner: Finance group. Scheduled housekeeping (contract expiry, overdue invoices, task reminders).
+// Owner: Finance group. Scheduled housekeeping (contract expiry, overdue invoices, task reminders, attendance days,
+// recurring tasks, overdue-task automations).
 // startMaintenance() is called once when the server starts (never in tests; tests call runMaintenance() directly).
 //
 // The job is idempotent: a second run right after the first changes nothing and creates no notification, because
 //   - status transitions only fire for rows that still have the old status, and
 //   - every notification is de-duplicated (same user + type + entity within 24 hours).
 import { prisma } from '../db';
+import { closePastDays } from './attendance';
 import { audit } from './audit';
+import { runOverdueAutomations } from './taskAutomations';
+import { generateRecurringTasks } from './taskRecurrence';
 import { addDays, daysBetween, financeRecipients, notifyDedup, todayUtc } from './finance';
 
-const SIX_HOURS = 6 * 3_600_000;
+const INTERVAL = 3_600_000; // hourly: every step is idempotent
 const SYSTEM = { ip: null, user: null } as const;
 
 export interface MaintenanceResult {
@@ -16,6 +20,9 @@ export interface MaintenanceResult {
   contractsExpired: number;
   invoicesOverdue: number;
   taskReminders: number;
+  attendanceDaysClosed: number;
+  recurringTasksCreated: number;
+  automationsRun: number;
 }
 
 /** Contracts: ACTIVE -> EXPIRING (end date within 30 days), ACTIVE / EXPIRING -> EXPIRED (end date passed). Never touches DRAFT / TERMINATED. */
@@ -90,15 +97,30 @@ async function taskStep(r: MaintenanceResult): Promise<void> {
   }
 }
 
+/** Past working days without a record become ABSENT (or ON_LEAVE / HOLIDAY). */
+async function attendanceStep(r: MaintenanceResult): Promise<void> {
+  r.attendanceDaysClosed += await closePastDays();
+}
+
+/** Recurring tasks: every due occurrence becomes a task (duplicate-proof, see taskRecurrence.ts). */
+async function recurringStep(r: MaintenanceResult): Promise<void> {
+  r.recurringTasksCreated += await generateRecurringTasks();
+}
+
+/** "When a task becomes overdue" automation rules (each rule runs once per task). */
+async function automationStep(r: MaintenanceResult): Promise<void> {
+  r.automationsRun += await runOverdueAutomations();
+}
+
 let running = false;
 
 export async function runMaintenance(): Promise<MaintenanceResult> {
-  const r: MaintenanceResult = { contractsExpiring: 0, contractsExpired: 0, invoicesOverdue: 0, taskReminders: 0 };
+  const r: MaintenanceResult = { contractsExpiring: 0, contractsExpired: 0, invoicesOverdue: 0, taskReminders: 0, attendanceDaysClosed: 0, recurringTasksCreated: 0, automationsRun: 0 };
   if (running) return r;
   running = true;
   try {
     // each step is isolated: one failing step never stops the others, and nothing sensitive is logged
-    for (const [name, step] of [['contracts', contractStep], ['invoices', invoiceStep], ['tasks', taskStep]] as const) {
+    for (const [name, step] of [['contracts', contractStep], ['invoices', invoiceStep], ['tasks', taskStep], ['attendance', attendanceStep], ['recurring', recurringStep], ['automations', automationStep]] as const) {
       try {
         await step(r);
       } catch (err) {
@@ -116,6 +138,6 @@ let timer: NodeJS.Timeout | null = null;
 export function startMaintenance(): void {
   if (process.env.NODE_ENV === 'test' || timer) return;
   void runMaintenance().catch(() => undefined);
-  timer = setInterval(() => void runMaintenance().catch(() => undefined), SIX_HOURS);
+  timer = setInterval(() => void runMaintenance().catch(() => undefined), INTERVAL);
   timer.unref();
 }

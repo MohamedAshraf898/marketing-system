@@ -5,9 +5,11 @@ import {
 } from '../../../shared/src/enums';
 import { prisma } from '../db';
 import {
-  activityWhere, campaignWhere, clientWhere, contentWhere, contractWhere, deliverableWhere, invoiceWhere, projectWhere, reportWhere,
+  activityWhere, campaignWhere, clientTaskWhere, clientWhere, contentWhere, contractWhere, deliverableWhere, invoiceWhere, projectWhere, reportWhere,
   requestWhere, taskWhere, timeEntryWhere, type Scope,
 } from '../authz/scope';
+import { dayBoard, loadSchedules, todayKeyFor } from './attendance';
+import { assignedTo } from './tasks';
 import type { Ctx } from '../lib/context';
 import { attachPreviews } from './deliverables';
 import { addDaysUtc, loadProjectStats, progressOf, todayUtc } from './projects';
@@ -218,7 +220,7 @@ async function buildStaffWidgets(ctx: Ctx) {
   const in30 = addDaysUtc(today, 30);
   const weekStart = weekStartUtc(today);
   const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-  const tw = (extra?: Prisma.TaskWhereInput) => and<Prisma.TaskWhereInput>(taskWhere(s), { status: { in: ACTIVE_TASK_STATUSES } }, extra);
+  const tw = (extra?: Prisma.TaskWhereInput) => and<Prisma.TaskWhereInput>(taskWhere(s), { status: { in: ACTIVE_TASK_STATUSES }, archivedAt: null }, extra);
   const pw = (extra?: Prisma.ProjectWhereInput) => and<Prisma.ProjectWhereInput>(projectWhere(s), extra);
   const cnw = (extra?: Prisma.ContentItemWhereInput) => and<Prisma.ContentItemWhereInput>(contentWhere(s), extra);
   const ctw = (extra?: Prisma.ContractWhereInput) => and<Prisma.ContractWhereInput>(contractWhere(s), extra);
@@ -233,11 +235,13 @@ async function buildStaffWidgets(ctx: Ctx) {
   // ── tasks ──
   if (has('tasks.view')) {
     job(async () => {
-      const mine = (extra?: Prisma.TaskWhereInput) => tw({ assignedToId: s.userId, ...extra });
-      const [open, overdue, dueToday, next, overdueTotal, upcoming] = await Promise.all([
+      const mine = (extra?: Prisma.TaskWhereInput) => and<Prisma.TaskWhereInput>(tw(extra), assignedTo(s.userId));
+      const [open, overdue, dueToday, dueSoon, completedThisWeek, next, overdueTotal, upcoming] = await Promise.all([
         prisma.task.count({ where: mine() }),
         prisma.task.count({ where: mine({ dueDate: { lt: today } }) }),
         prisma.task.count({ where: mine({ dueDate: { gte: today, lt: tomorrow } }) }),
+        prisma.task.count({ where: mine({ dueDate: { gte: tomorrow, lt: in8 } }) }),
+        prisma.task.count({ where: and<Prisma.TaskWhereInput>(taskWhere(s), assignedTo(s.userId), { status: 'DONE', completedAt: { gte: weekStart } }) }),
         prisma.task.findMany({
           where: mine({ dueDate: { not: null } }),
           orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
@@ -252,7 +256,7 @@ async function buildStaffWidgets(ctx: Ctx) {
           select: { id: true, title: true, dueDate: true, projectId: true, client: { select: { companyName: true } } },
         }),
       ]);
-      out.myTasks = { open, overdue, dueToday, next };
+      out.myTasks = { open, overdue, dueToday, upcoming: dueSoon, completedThisWeek, next };
       out.overdueTasks = { total: overdueTotal };
       for (const t of upcoming) if (t.dueDate) deadlineParts.push({ kind: 'TASK', id: t.id, title: t.title, date: t.dueDate, projectId: t.projectId, clientName: t.client?.companyName ?? null });
     });
@@ -423,6 +427,46 @@ async function buildStaffWidgets(ctx: Ctx) {
     });
   }
 
+  // ── attendance (own day; the team's live board only with attendance.view_all) ──
+  if (has('attendance.track') || has('attendance.view_all') || has('leave.approve')) {
+    job(async () => {
+      const book = await loadSchedules();
+      const now = new Date();
+      if (has('attendance.track')) {
+        const me = await prisma.user.findUnique({ where: { id: s.userId }, select: { id: true, name: true, avatar: true, jobTitle: true, role: true, workScheduleId: true, createdAt: true } });
+        const schedule = book.byId.get(me?.workScheduleId ?? '') ?? book.def;
+        const key = todayKeyFor(schedule, now);
+        const [row] = me ? await dayBoardFor(key, book, now, me.id) : [];
+        if (row) out.myAttendance = { date: row.date, status: row.status, presence: row.presence, checkInAt: row.checkInAt, checkOutAt: row.checkOutAt, workedMinutes: row.workedMinutes, lateMinutes: row.lateMinutes, onBreak: row.onBreak, schedule: row.schedule };
+      }
+      if (has('attendance.view_all')) {
+        const key = todayKeyFor(book.def, now);
+        const rows = await dayBoard(key, book, now);
+        const presence: Record<string, number> = {};
+        for (const r of rows) presence[r.presence] = (presence[r.presence] ?? 0) + 1;
+        out.teamAttendance = {
+          date: key,
+          members: rows.length,
+          presence,
+          late: rows.filter((r) => r.lateMinutes > 0).slice(0, 6).map((r) => ({ userId: r.userId, name: r.user?.name ?? '', lateMinutes: r.lateMinutes, checkInAt: r.checkInAt })),
+          working: rows.filter((r) => r.presence === 'WORKING' || r.presence === 'ON_BREAK').slice(0, 8).map((r) => ({ userId: r.userId, name: r.user?.name ?? '', presence: r.presence, checkInAt: r.checkInAt })),
+        };
+      }
+      if (has('leave.approve')) out.pendingLeave = { count: await prisma.leaveRequest.count({ where: { status: 'PENDING' } }) };
+    });
+  }
+
+  // ── team workload snapshot (overdue work per person, only work the caller may see) ──
+  if (has('workload.view') && has('tasks.view')) {
+    job(async () => {
+      const overdueWhere = and<Prisma.TaskWhereInput>(tw({ dueDate: { lt: today } }));
+      const grouped = await prisma.taskAssignee.groupBy({ by: ['userId'], where: { task: overdueWhere }, _count: { _all: true }, orderBy: { _count: { userId: 'desc' } }, take: 6 });
+      const users = await prisma.user.findMany({ where: { id: { in: grouped.map((g) => g.userId) } }, select: { id: true, name: true } });
+      const names = new Map(users.map((u) => [u.id, u.name]));
+      out.teamWorkload = { overdueByPerson: grouped.map((g) => ({ userId: g.userId, name: names.get(g.userId) ?? '', overdue: g._count._all })) };
+    });
+  }
+
   job(async () => { out.recentActivity = await recentActivity(s); });
 
   await Promise.all(jobs);
@@ -434,6 +478,9 @@ async function buildStaffWidgets(ctx: Ctx) {
   }
   return out;
 }
+
+/** The roster board narrowed to one person (their own day). */
+const dayBoardFor = (key: string, book: Awaited<ReturnType<typeof loadSchedules>>, now: Date, userId: string) => dayBoard(key, book, now, userId, true);
 
 async function buildClientWidgets(ctx: Ctx) {
   const s = ctx.scope;
@@ -469,6 +516,19 @@ async function buildClientWidgets(ctx: Ctx) {
     ),
     recentActivity(s),
   ]);
+
+  // tasks the agency explicitly shared with this client (never internal ones)
+  const shared = clientTaskWhere(s);
+  const [sharedOpen, sharedItems] = await Promise.all([
+    prisma.task.count({ where: and<Prisma.TaskWhereInput>(shared, { status: { not: 'DONE' } }) }),
+    prisma.task.findMany({
+      where: and<Prisma.TaskWhereInput>(shared, { status: { not: 'DONE' } }),
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      take: 5,
+      select: { id: true, title: true, status: true, dueDate: true, project: { select: { id: true, name: true } } },
+    }),
+  ]);
+  if (sharedOpen > 0) out.sharedTasks = { open: sharedOpen, items: sharedItems };
 
   const stats = await loadProjectStats(projects.map((p) => p.id), today);
   out.projects = projects.map((p) => {

@@ -15,6 +15,7 @@ import type { SeedCtx } from './ctx';
 import { seedContent } from './seedContent';
 import { seedCrm } from './seedCrm';
 import { seedFinance } from './seedFinance';
+import { seedPhase3 } from './seedPhase3';
 import { seedTime } from './seedTime';
 import { seedWork } from './seedWork';
 
@@ -41,13 +42,20 @@ async function wipe() {
   await Promise.all(files.map((f) => storage.delete(f.filePath).catch(() => undefined)));
   // children first
   await prisma.$transaction([
+    // phase 3 (children of tasks / users / spaces first)
+    prisma.attendanceBreak.deleteMany(), prisma.attendance.deleteMany(), prisma.leaveRequest.deleteMany(), prisma.holiday.deleteMany(),
+    prisma.taskAssignee.deleteMany(), prisma.taskTagLink.deleteMany(), prisma.taskTag.deleteMany(), prisma.taskCustomFieldValue.deleteMany(),
+    prisma.taskDependency.deleteMany(), prisma.taskRecurrence.deleteMany(), prisma.taskAutomation.deleteMany(), prisma.taskTemplateItem.deleteMany(),
+    prisma.taskTemplate.deleteMany(),
     prisma.notification.deleteMany(), prisma.auditLog.deleteMany(), prisma.comment.deleteMany(), prisma.file.deleteMany(),
     prisma.timeEntry.deleteMany(), prisma.taskComment.deleteMany(), prisma.taskChecklistItem.deleteMany(), prisma.proofingComment.deleteMany(),
-    prisma.task.deleteMany(), prisma.milestone.deleteMany(), prisma.contentItem.deleteMany(), prisma.onboardingItem.deleteMany(),
+    prisma.task.updateMany({ data: { parentId: null, recurrenceSourceId: null } }), prisma.task.deleteMany(),
+    prisma.taskCustomField.deleteMany(), prisma.taskStatusOption.deleteMany(), prisma.taskList.deleteMany(), prisma.folder.deleteMany(), prisma.space.deleteMany(),
+    prisma.milestone.deleteMany(), prisma.contentItem.deleteMany(), prisma.onboardingItem.deleteMany(),
     prisma.invoice.deleteMany(), prisma.contract.deleteMany(), prisma.internalNote.deleteMany(), prisma.clientContact.deleteMany(),
     prisma.approval.deleteMany(), prisma.report.deleteMany(), prisma.request.deleteMany(), prisma.deliverable.deleteMany(),
     prisma.campaignAssignment.deleteMany(), prisma.clientAssignment.deleteMany(), prisma.session.deleteMany(),
-    prisma.campaign.deleteMany(), prisma.project.deleteMany(), prisma.user.deleteMany(), prisma.client.deleteMany(), prisma.appSettings.deleteMany(),
+    prisma.campaign.deleteMany(), prisma.project.deleteMany(), prisma.user.updateMany({ data: { workScheduleId: null } }), prisma.user.deleteMany(), prisma.client.deleteMany(), prisma.appSettings.deleteMany(),
   ]);
 }
 
@@ -76,7 +84,7 @@ async function main() {
   const [adminHash, demoHash] = await Promise.all([hashPassword(adminPassword), hashPassword(demoPassword)]);
 
   // ── people ──
-  const admin = await prisma.user.create({ data: { name: process.env.SEED_ADMIN_NAME?.trim() || 'OG Admin', email: adminEmail, role: 'ADMIN', passwordHash: adminHash } });
+  const admin = await prisma.user.create({ data: { name: process.env.SEED_ADMIN_NAME?.trim() || 'Famolya Admin', email: adminEmail, role: 'ADMIN', passwordHash: adminHash } });
   const sara = await prisma.user.create({ data: { name: 'Sara Hassan (DEMO)', email: 'sara@demo.local', role: 'TEAM', passwordHash: demoHash } });
   const omar = await prisma.user.create({ data: { name: 'عمر خالد (DEMO)', email: 'omar@demo.local', role: 'TEAM', passwordHash: demoHash, locale: 'ar' } });
 
@@ -302,6 +310,7 @@ async function main() {
   await seedContent(ctx);
   await seedFinance(ctx);
   await seedTime(ctx);
+  await seedPhase3(ctx);
 
   console.log('\nDemo data loaded.\n');
   console.log('  ROLE     EMAIL                      PASSWORD');

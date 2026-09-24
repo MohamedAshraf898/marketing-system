@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardCheck, FilePlus2, FolderKanban, LifeBuoy, MessageSquareText, PencilLine, Plus, Upload, UserPlus, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { useApi } from '@/api/hooks';
-import type { DashboardResponse } from '@/api/types';
+import type { DashboardData, DashClientProject } from '@/api/types.admin';
 import { useAuth } from '@/auth/AuthContext';
 import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +19,10 @@ import { ReportFormModal } from '@/components/forms/ReportFormModal';
 import { RequestFormModal } from '@/components/forms/RequestFormModal';
 import { UploadFileModal } from '@/components/forms/UploadFileModal';
 import { UserFormModal } from '@/components/forms/UserFormModal';
+import { CheckInCard } from '@/components/attendance/attendanceUi';
+import {
+  ActivityCard, ClientProjectsCard, DeadlinesCard, MyTasksCard, OverdueByPersonCard, SharedTasksCard, TeamAttendanceCard, UpcomingContentCard,
+} from './widgets';
 
 type Modal = 'client' | 'user' | 'campaign' | 'deliverable' | 'upload' | 'request' | 'report' | null;
 
@@ -44,7 +48,7 @@ function QuickAction({ icon: Icon, label, onClick }: { icon: LucideIcon; label: 
 export function DashboardPage() {
   const { user } = useAuth();
   const { t, fmt } = useI18n();
-  const q = useApi<DashboardResponse>('/dashboard');
+  const q = useApi<DashboardData>('/dashboard');
   const [modal, setModal] = useState<Modal>(null);
   const close = () => setModal(null);
   if (!user) return null;
@@ -111,6 +115,8 @@ export function DashboardPage() {
           <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${role === 'ADMIN' ? 'lg:grid-cols-3 xl:grid-cols-6' : role === 'TEAM' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
             {kpis.map((c) => <StatCard key={c.label} label={c.label} value={c.value} icon={c.icon} tone={c.tone} loading={q.isLoading} />)}
           </div>
+
+          {!q.isLoading && d && <PhaseThree d={d} role={role} />}
 
           {q.isLoading || !d ? <SkeletonCards count={4} className="mt-6 lg:grid-cols-2" /> : (
             <div className="mt-6 grid gap-5 lg:grid-cols-2">
@@ -179,4 +185,23 @@ export function DashboardPage() {
       {modal === 'report' && <ReportFormModal open onClose={close} />}
     </div>
   );
+}
+
+/** Attendance, tasks and team widgets (every block is only present when the API sent it for this user). */
+function PhaseThree({ d, role }: { d: DashboardData; role: string }) {
+  const { can } = useAuth();
+  const clientProjects = role === 'CLIENT' && Array.isArray(d.projects) ? (d.projects as DashClientProject[]) : null;
+  const blocks = [
+    role !== 'CLIENT' && can('attendance.track') ? <CheckInCard key="checkin" compact /> : null,
+    d.teamAttendance ? <TeamAttendanceCard key="team" d={d.teamAttendance} pendingLeave={d.pendingLeave?.count} /> : null,
+    d.myTasks ? <MyTasksCard key="mytasks" d={d.myTasks} /> : null,
+    d.teamWorkload ? <OverdueByPersonCard key="overdue" d={d.teamWorkload} /> : null,
+    d.upcomingDeadlines ? <DeadlinesCard key="deadlines" items={d.upcomingDeadlines} /> : null,
+    d.sharedTasks ? <SharedTasksCard key="shared" d={d.sharedTasks} /> : null,
+    clientProjects ? <ClientProjectsCard key="cprojects" items={clientProjects} /> : null,
+    d.upcomingContent ? <UpcomingContentCard key="ccontent" items={d.upcomingContent} /> : null,
+    d.recentActivity ? <ActivityCard key="activity" items={d.recentActivity} staff={role !== 'CLIENT'} /> : null,
+  ].filter(Boolean);
+  if (blocks.length === 0) return null;
+  return <div className="mt-6 grid gap-5 lg:grid-cols-2">{blocks}</div>;
 }
