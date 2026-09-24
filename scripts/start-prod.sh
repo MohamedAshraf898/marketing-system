@@ -53,5 +53,5 @@ case "${SEED_ADMIN_PASSWORD:-}" in
     ;;
 esac
 
-echo "> Starting OG System on port ${PORT:-4000}"
+echo "> Starting Famolya on port ${PORT:-4000}"
 exec npm start

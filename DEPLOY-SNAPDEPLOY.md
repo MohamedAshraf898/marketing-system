@@ -1,4 +1,4 @@
-# Deploy OG System on SnapDeploy (with persistent data)
+# Deploy Famolya on SnapDeploy (with persistent data)
 
 SnapDeploy's containers have **no persistent disk on any plan** - anything written to local disk
 (the SQLite database file, uploaded files) is lost on every restart, sleep/wake cycle, or
@@ -66,7 +66,7 @@ Unzip the project, push it to a **private** GitHub repository (`.gitignore` alre
 databases and uploads out of it):
 ```bash
 cd og-system
-git init && git add . && git commit -m "OG System"
+git init && git add . && git commit -m "Famolya"
 git branch -M main
 git remote add origin https://github.com/<you>/og-system.git
 git push -u origin main
@@ -123,7 +123,7 @@ On every start, the container:
 3. Starts the app.
 
 Watch the deploy logs for `Migrations applied (remote database).` and
-`OG System API listening on ...`. Then open the container's URL and sign in with your admin
+`Famolya API listening on ...`. Then open the container's URL and sign in with your admin
 email and password.
 
 ## 6. Verify persistence

@@ -1,4 +1,4 @@
-# Deploy OG System on Railway (trial)
+# Deploy Famolya on Railway (trial)
 
 This project already contains everything Railway needs: `Dockerfile`, `railway.json`
 and `scripts/start-prod.sh`. On every start the container applies the database
@@ -23,7 +23,7 @@ Pick ONE way.
 1. Unzip `og-system.zip`, create a **private** GitHub repository and push the folder:
    ```bash
    cd og-system
-   git init && git add . && git commit -m "OG System"
+   git init && git add . && git commit -m "Famolya"
    git branch -M main
    git remote add origin https://github.com/<you>/og-system.git
    git push -u origin main

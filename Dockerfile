@@ -1,4 +1,4 @@
-# OG System - production image (used by Railway, Fly.io, any Docker host)
+# Famolya - production image (used by Railway, Fly.io, any Docker host)
 FROM node:22-bookworm-slim
 
 # openssl + CA certs are needed by Prisma (migrations) and outbound HTTPS
